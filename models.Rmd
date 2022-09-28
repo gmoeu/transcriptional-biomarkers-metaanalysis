@@ -1,0 +1,517 @@
+---
+title: "models"
+author: "Gustaf M.O. Ekelund Ugge"
+date: '2022-09-06'
+output: pdf_document
+---
+
+Packages
+```{r}
+library('openxlsx')
+library('brms')
+#library('dplyr')
+#library('tidybayes')
+library('metaAidR')
+```
+
+
+Dataset
+```{r}
+df <- read.xlsx('dataset.xlsx')
+df$sLRR <- sqrt(df$vLRR)
+df$log_time <- log(df$time, 2)
+df$effective_samplesize <- (4*df$n*df$n_control_adjusted)/(df$n+df$n_control_adjusted) ## see Nakagawa et al. 2021, 'Methods for testing publication bias in ecological and evolutionary meta-analyses', Methods Ecol Evol
+df$inv_eff_n <- 1/df$effective_samplesize
+df$sqrt_inv_eff_n <- sqrt(df$inv_eff_n)
+df$maincat <- paste(df$study,df$species,df$tissue,df$biomarker,df$time)
+df$maincat_notbiomarker<- paste(df$study,df$species,df$tissue,df$time)
+df$maincat_nottissue<- paste(df$study,df$species,df$biomarker,df$time)
+df$maincat_nottime <- paste(df$study,df$species,df$tissue,df$biomarker)
+df$maincat_notbiomarkertime <- paste(df$study,df$species,df$tissue)
+df$maincat_nottissuetime <- paste(df$study,df$species,df$biomarker)
+df$nonindependence_multipleeffects <- paste(df$study, df$toxicant, df$concentration)
+summary(df)
+
+## Addition of toxic unit (calculated in separate script and exported to 'toxic_unit.xlsx')
+toxicunit <- read.xlsx('toxic_unit.xlsx')
+x <- 1:nrow(df)
+df$tu <- x
+
+for (val in x) {
+  if (df$toxicant[val] == "Ag+") {
+    df$tu[val] <- df$concentration[val]/toxicunit[1,2]
+  } else {
+  if (df$toxicant[val] == "Ag (bulk)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[1,2]
+  } else {
+  if (df$toxicant[val] == "As(III)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[2,2]
+  } else {
+  if (df$toxicant[val] == "As(V)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[3,2]
+  } else {
+  if (df$toxicant[val] == "Cd") {
+    df$tu[val] <- df$concentration[val]/toxicunit[4,2]
+  } else {
+  if (df$toxicant[val] == "Cr(VI)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[5,2]
+  } else {
+  if (df$toxicant[val] == "Cu") {
+    df$tu[val] <- df$concentration[val]/toxicunit[6,2]
+  } else {
+  if (df$toxicant[val] == "Gd") {
+    df$tu[val] <- df$concentration[val]/toxicunit[7,2]
+  } else {
+  if (df$toxicant[val] == "Hg") {
+    df$tu[val] <- df$concentration[val]/toxicunit[8,2]
+  } else {
+  if (df$toxicant[val] == "Ni") {
+    df$tu[val] <- df$concentration[val]/toxicunit[9,2]
+  } else {
+  if (df$toxicant[val] == "Pb") {
+    df$tu[val] <- df$concentration[val]/toxicunit[10,2]
+  } else {
+  if (df$toxicant[val] == "Sm") {
+    df$tu[val] <- df$concentration[val]/toxicunit[11,2]
+  } else {
+  if (df$toxicant[val] == "Y") {
+    df$tu[val] <- df$concentration[val]/toxicunit[12,2]
+  } else {
+  if (df$toxicant[val] == "Zn") {
+    df$tu[val] <- df$concentration[val]/toxicunit[13,2]
+  } else {
+    df$tu[val] <- NA }}}}}}}}}}}}}}}
+df$log_tu <- log(df$tu, 10)
+
+## Removal of tissue-specific effects of visceral mass (only one study)
+for (val in x) {
+  if (df$tissue[val] == "Visceral mass") {
+    df$tissue[val] <- NA} else {
+    df$tissue[val] <- df$tissue[val]}}
+```
+
+
+Addition of variance-covariance matrix to account for correlation between multiple measures (biomarker × tissue × time combinations) in each treatment group (study × toxicant × concentration). Correlation set to 0.5 for all comparisons within the same treatment group (study × toxicant × concentration).
+```{r}
+df$no <- 1:nrow(df)
+vcv_matrix <- make_VCV_matrix(data=df, V="vLRR", cluster="nonindependence_multipleeffects", obs = "no", type = "vcv", rho = 0.5)
+```
+
+
+Model fits
+```{r}
+#mod1 <- brm(LRR ~ (1|maincat) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod1, file = "mod1.rds")
+#mod2 <- brm(LRR ~ -1 + biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod2, file = "mod2.rds")
+#mod3 <- brm(LRR ~ -1 + tissue + (1|maincat_nottissue) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod3, file = "mod3.rds")
+#mod4 <- brm(LRR ~ log_tu + (1|maincat) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod4, file = "mod4.rds")
+#mod5 <- brm(LRR ~ log_tu*biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod5, file = "mod5.rds")
+#mod6 <- brm(LRR ~ log_tu*tissue + (1|maincat_nottissue) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod6, file = "mod6.rds")
+#mod7 <- brm(LRR ~ log_time + (1|maincat_nottime) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod7, file = "mod7.rds")
+#mod8 <- brm(LRR ~ log_time*biomarker + (1|maincat_notbiomarkertime) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod8, file = "mod8.rds")
+#mod9 <- brm(LRR ~ log_time*tissue + (1|maincat_nottissuetime) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#saveRDS(object = mod9, file = "mod9.rds")
+
+mod1 <- readRDS("mod1.rds")
+mod2 <- readRDS("mod2.rds")
+mod3 <- readRDS("mod3.rds")
+mod4 <- readRDS("mod4.rds")
+mod5 <- readRDS("mod5.rds")
+mod6 <- readRDS("mod6.rds")
+mod7 <- readRDS("mod7.rds")
+mod8 <- readRDS("mod8.rds")
+mod9 <- readRDS("mod9.rds")
+
+summary(mod1)
+summary(mod2)
+summary(mod3)
+summary(mod4)
+summary(mod5)
+summary(mod6)
+summary(mod7)
+summary(mod8)
+summary(mod9)
+```
+
+
+Heterogeneity
+```{r}
+W <- solve(vcv_matrix)
+
+mod1_X <- model.matrix(~ 1, model.frame(~ ., data = df, na.action=na.pass))
+mod2_X <- model.matrix(~ -1 + biomarker, model.frame(~ ., data = df, na.action=na.pass))
+mod3_X <- model.matrix(~ -1 + tissue, model.frame(~ ., data = df, na.action=na.pass))
+mod4_X <- model.matrix(~ log_tu, model.frame(~ ., data = df, na.action=na.pass))
+mod5_X <- model.matrix(~ log_tu*biomarker, model.frame(~ ., data = df, na.action=na.pass))
+mod6_X <- model.matrix(~ log_tu*tissue, model.frame(~ ., data = df, na.action=na.pass))
+mod7_X <- model.matrix(~ log_time, model.frame(~ ., data = df, na.action=na.pass))
+mod8_X <- model.matrix(~ log_time*biomarker, model.frame(~ ., data = df, na.action=na.pass))
+mod9_X <- model.matrix(~ log_time*tissue, model.frame(~ ., data = df, na.action=na.pass))
+
+
+mod1_tau2 <- as.data.frame(summary(mod1)$random)[1,1]^2
+mod2_tau2 <- as.data.frame(summary(mod2)$random)[1,1]^2
+mod3_tau2 <- as.data.frame(summary(mod3)$random)[1,1]^2
+mod4_tau2 <- as.data.frame(summary(mod4)$random)[1,1]^2
+mod5_tau2 <- as.data.frame(summary(mod5)$random)[1,1]^2
+mod6_tau2 <- as.data.frame(summary(mod6)$random)[1,1]^2
+mod7_tau2 <- as.data.frame(summary(mod7)$random)[1,1]^2
+mod8_tau2 <- as.data.frame(summary(mod8)$random)[1,1]^2
+mod9_tau2 <- as.data.frame(summary(mod9)$random)[1,1]^2
+
+
+mod1_P <- W - W %*% mod1_X %*% solve(t(mod1_X) %*% W %*% mod1_X) %*% t(mod1_X) %*% W
+mod1_I2 <- 100 * mod1_tau2/(mod1_tau2 + (summary(mod1)$nobs-ncol(mod1_X))/sum(diag(mod1_P)))
+
+mod2_P <- W - W %*% mod2_X %*% solve(t(mod2_X) %*% W %*% mod2_X) %*% t(mod2_X) %*% W
+mod2_I2_overall <- 100 * mod2_tau2/(mod2_tau2 + (summary(mod2)$nobs-ncol(mod2_X))/sum(diag(mod2_P)))
+mod2_I2 <- c(100 * mod2_tau2/(mod2_tau2 + (sum(df$biomarker == "cat")-1)/sum(diag(mod2_P)[df$biomarker == "cat"])),
+             100 * mod2_tau2/(mod2_tau2 + (sum(df$biomarker == "gst")-1)/sum(diag(mod2_P)[df$biomarker == "gst"])),
+             100 * mod2_tau2/(mod2_tau2 + (sum(df$biomarker == "hsp70")-1)/sum(diag(mod2_P)[df$biomarker == "hsp70"])),
+             100 * mod2_tau2/(mod2_tau2 + (sum(df$biomarker == "hsp90")-1)/sum(diag(mod2_P)[df$biomarker == "hsp90"])),
+             100 * mod2_tau2/(mod2_tau2 + (sum(df$biomarker == "mt")-1)/sum(diag(mod2_P)[df$biomarker == "mt"])),
+             100 * mod2_tau2/(mod2_tau2 + (sum(df$biomarker == "sod")-1)/sum(diag(mod2_P)[df$biomarker == "sod"])))
+
+mod2_cat_I2 <- mod2_I2[1]
+mod2_gst_I2 <- mod2_I2[2]
+mod2_hsp70_I2 <- mod2_I2[3]
+mod2_hsp90_I2 <- mod2_I2[4]
+mod2_mt_I2 <- mod2_I2[5]
+mod2_sod_I2 <- mod2_I2[6]
+
+W_tissue <- na.omit(cbind(W, mod3_X))
+W_tissue <- W_tissue[,1:nrow(df)]
+W_tissue <- na.omit(cbind(t(W_tissue),mod3_X))
+W_tissue <- t(W_tissue[,1:summary(mod3)$nobs])
+
+mod3_X <- na.omit(mod3_X)
+mod3_P <- W_tissue - W_tissue %*% mod3_X %*% solve(t(mod3_X) %*% W_tissue %*% mod3_X) %*% t(mod3_X) %*% W_tissue
+mod3_I2_overall <- 100 * mod3_tau2/(mod3_tau2 + (summary(mod3)$nobs-ncol(mod3_X))/sum(diag(mod3_P)))
+mod3_I2 <- c(100 * mod3_tau2/(mod3_tau2 + (sum(na.omit(df$tissue) == "Digestive gland")-1)/sum(diag(mod3_P)[na.omit(df$tissue) == "Digestive gland"])),
+             100 * mod3_tau2/(mod3_tau2 + (sum(na.omit(df$tissue) == "Gills")-1)/sum(diag(mod3_P)[na.omit(df$tissue) == "Gills"])),
+             100 * mod3_tau2/(mod3_tau2 + (sum(na.omit(df$tissue) == "Gonads")-1)/sum(diag(mod3_P)[na.omit(df$tissue) == "Gonads"])))
+
+mod3_dg_I2 <- mod3_I2[1]
+mod3_gill_I2 <- mod3_I2[2]
+mod3_gonad_I2 <- mod3_I2[3]
+
+W_log_tu <- na.omit(cbind(W, mod4_X))
+W_log_tu <- W_log_tu[,1:nrow(df)]
+W_log_tu <- na.omit(cbind(t(W_log_tu),mod4_X))
+W_log_tu <- t(W_log_tu[,1:summary(mod4)$nobs])
+
+mod4_X <- na.omit(mod4_X)
+mod4_P <- W_log_tu - W_log_tu %*% mod4_X %*% solve(t(mod4_X) %*% W_log_tu %*% mod4_X) %*% t(mod4_X) %*% W_log_tu
+mod4_I2 <- 100 * mod4_tau2/(mod4_tau2 + (summary(mod4)$nobs-ncol(mod4_X))/sum(diag(mod4_P)))
+
+mod5_X <- na.omit(mod5_X)
+mod5_P <- W_log_tu - W_log_tu %*% mod5_X %*% solve(t(mod5_X) %*% W_log_tu %*% mod5_X) %*% t(mod5_X) %*% W_log_tu
+mod5_I2_overall <- 100 * mod5_tau2/(mod5_tau2 + (summary(mod5)$nobs-ncol(mod5_X))/sum(diag(mod5_P)))
+mod5_I2 <- c(100 * mod5_tau2/(mod5_tau2 + (sum(na.omit(df)$biomarker == "cat")-1)/sum(diag(mod5_P)[na.omit(df)$biomarker == "cat"])),
+             100 * mod5_tau2/(mod5_tau2 + (sum(na.omit(df)$biomarker == "gst")-1)/sum(diag(mod5_P)[na.omit(df)$biomarker == "gst"])),
+             100 * mod5_tau2/(mod5_tau2 + (sum(na.omit(df)$biomarker == "hsp70")-1)/sum(diag(mod5_P)[na.omit(df)$biomarker == "hsp70"])),
+             100 * mod5_tau2/(mod5_tau2 + (sum(na.omit(df)$biomarker == "hsp90")-1)/sum(diag(mod5_P)[na.omit(df)$biomarker == "hsp90"])),
+             100 * mod5_tau2/(mod5_tau2 + (sum(na.omit(df)$biomarker == "mt")-1)/sum(diag(mod5_P)[na.omit(df)$biomarker == "mt"])),
+             100 * mod5_tau2/(mod5_tau2 + (sum(na.omit(df)$biomarker == "sod")-1)/sum(diag(mod5_P)[na.omit(df)$biomarker == "sod"])))
+
+
+mod5_cat_I2 <- mod5_I2[1]
+mod5_gst_I2 <- mod5_I2[2]
+mod5_hsp70_I2 <- mod5_I2[3]
+mod5_hsp90_I2 <- mod5_I2[4]
+mod5_mt_I2 <- mod5_I2[5]
+mod5_sod_I2 <- mod5_I2[6]
+
+mod6_X <- na.omit(mod6_X)
+mod6_P <- W_log_tu - W_log_tu %*% mod6_X %*% solve(t(mod6_X) %*% W_log_tu %*% mod6_X) %*% t(mod6_X) %*% W_log_tu
+mod6_I2_overall <- 100 * mod6_tau2/(mod6_tau2 + (summary(mod6)$nobs-ncol(mod6_X))/sum(diag(mod6_P)))
+mod6_I2 <- c(100 * mod6_tau2/(mod6_tau2 + (sum(na.omit(df)$tissue == "Digestive gland")-1)/sum(diag(mod6_P)[na.omit(df)$tissue == "Digestive gland"])),
+             100 * mod6_tau2/(mod6_tau2 + (sum(na.omit(df)$tissue == "Gills")-1)/sum(diag(mod6_P)[na.omit(df)$tissue == "Gills"])),
+             100 * mod6_tau2/(mod6_tau2 + (sum(na.omit(df)$tissue == "Gonads")-1)/sum(diag(mod6_P)[na.omit(df)$tissue == "Gonads"])))
+
+
+mod6_dg_I2 <- mod6_I2[1]
+mod6_gill_I2 <- mod6_I2[2]
+mod6_gonad_I2 <- mod6_I2[3]
+
+mod7_P <- W - W %*% mod7_X %*% solve(t(mod7_X) %*% W %*% mod7_X) %*% t(mod7_X) %*% W
+mod7_I2 <- 100 * mod7_tau2/(mod7_tau2 + (summary(mod7)$nobs-ncol(mod7_X))/sum(diag(mod7_P)))
+
+mod8_P <- W - W %*% mod8_X %*% solve(t(mod8_X) %*% W %*% mod8_X) %*% t(mod8_X) %*% W
+mod8_I2_overall <- 100 * mod8_tau2/(mod8_tau2 + (summary(mod8)$nobs-ncol(mod8_X))/sum(diag(mod8_P)))
+mod8_I2 <- c(100 * mod8_tau2/(mod8_tau2 + (sum(df$biomarker == "cat")-1)/sum(diag(mod8_P)[df$biomarker == "cat"])),
+             100 * mod8_tau2/(mod8_tau2 + (sum(df$biomarker == "gst")-1)/sum(diag(mod8_P)[df$biomarker == "gst"])),
+             100 * mod8_tau2/(mod8_tau2 + (sum(df$biomarker == "hsp70")-1)/sum(diag(mod8_P)[df$biomarker == "hsp70"])),
+             100 * mod8_tau2/(mod8_tau2 + (sum(df$biomarker == "hsp90")-1)/sum(diag(mod8_P)[df$biomarker == "hsp90"])),
+             100 * mod8_tau2/(mod8_tau2 + (sum(df$biomarker == "mt")-1)/sum(diag(mod8_P)[df$biomarker == "mt"])),
+             100 * mod8_tau2/(mod8_tau2 + (sum(df$biomarker == "sod")-1)/sum(diag(mod8_P)[df$biomarker == "sod"])))
+
+
+mod8_cat_I2 <- mod8_I2[1]
+mod8_gst_I2 <- mod8_I2[2]
+mod8_hsp70_I2 <- mod8_I2[3]
+mod8_hsp90_I2 <- mod8_I2[4]
+mod8_mt_I2 <- mod8_I2[5]
+mod8_sod_I2 <- mod8_I2[6]
+
+mod9_X <- na.omit(mod9_X)
+mod9_P <- W_tissue - W_tissue %*% mod9_X %*% solve(t(mod9_X) %*% W_tissue %*% mod9_X) %*% t(mod9_X) %*% W_tissue
+mod9_I2_overall <- 100 * mod9_tau2/(mod9_tau2 + (summary(mod9)$nobs-ncol(mod9_X))/sum(diag(mod9_P)))
+mod9_I2 <- c(100 * mod9_tau2/(mod9_tau2 + (sum(na.omit(df$tissue) == "Digestive gland")-1)/sum(diag(mod9_P)[na.omit(df$tissue) == "Digestive gland"])),
+             100 * mod9_tau2/(mod9_tau2 + (sum(na.omit(df$tissue) == "Gills")-1)/sum(diag(mod9_P)[na.omit(df$tissue) == "Gills"])),
+             100 * mod9_tau2/(mod9_tau2 + (sum(na.omit(df$tissue) == "Gonads")-1)/sum(diag(mod9_P)[na.omit(df$tissue) == "Gonads"])))
+
+mod9_dg_I2 <- mod9_I2[1]
+mod9_gill_I2 <- mod9_I2[2]
+mod9_gonad_I2 <- mod9_I2[3]
+
+heterogeneity <- data.frame(model = c("mod1",
+                "mod2_cat",
+                "mod2_gst",
+                "mod2_hsp70",
+                "mod2_hsp90",
+                "mod2_mt",
+                "mod2_sod",
+                "mod3_dg",
+                "mod3_gill",
+                "mod3_gonad",
+                "mod4",
+                "mod5_cat",
+                "mod5_gst",
+                "mod5_hsp70",
+                "mod5_hsp90",
+                "mod5_mt",
+                "mod5_sod",
+                "mod6_dg",
+                "mod6_gill",
+                "mod6_gonad",
+                "mod7",
+                "mod8_cat",
+                "mod8_gst",
+                "mod8_hsp70",
+                "mod8_hsp90",
+                "mod8_mt",
+                "mod8_sod",
+                "mod9_dg",
+                "mod9_gill",
+                "mod9_gonad"),
+           I2 = c(mod1_I2,
+                mod2_cat_I2,
+                mod2_gst_I2,
+                mod2_hsp70_I2,
+                mod2_hsp90_I2,
+                mod2_mt_I2,
+                mod2_sod_I2,
+                mod3_dg_I2,
+                mod3_gill_I2,
+                mod3_gonad_I2,
+                mod4_I2,
+                mod5_cat_I2,
+                mod5_gst_I2,
+                mod5_hsp70_I2,
+                mod5_hsp90_I2,
+                mod5_mt_I2,
+                mod5_sod_I2,
+                mod6_dg_I2,
+                mod6_gill_I2,
+                mod6_gonad_I2,
+                mod7_I2,
+                mod8_cat_I2,
+                mod8_gst_I2,
+                mod8_hsp70_I2,
+                mod8_hsp90_I2,
+                mod8_mt_I2,
+                mod8_sod_I2,
+                mod9_dg_I2,
+                mod9_gill_I2,
+                mod9_gonad_I2))
+
+#write.xlsx(heterogeneity, "heterogeneity.xlsx", asTable = TRUE, overwrite = TRUE)
+```
+
+
+Prediction intervals
+```{r}
+pp_mod1 <- posterior_samples(mod1)[,1:2]
+pred_mod1 <- pp_mod1[,1] + rnorm(nrow(pp_mod1), 0, pp_mod1[,2])
+
+pp_mod2 <- posterior_samples(mod2)[,1:7]
+pred_mod2_cat <- pp_mod2[,1] + rnorm(nrow(pp_mod2), 0, pp_mod2[,7])
+pred_mod2_gst <- pp_mod2[,2] + rnorm(nrow(pp_mod2), 0, pp_mod2[,7])
+pred_mod2_hsp70 <- pp_mod2[,3] + rnorm(nrow(pp_mod2), 0, pp_mod2[,7])
+pred_mod2_hsp90 <- pp_mod2[,4] + rnorm(nrow(pp_mod2), 0, pp_mod2[,7])
+pred_mod2_mt <- pp_mod2[,5] + rnorm(nrow(pp_mod2), 0, pp_mod2[,7])
+pred_mod2_sod <- pp_mod2[,6] + rnorm(nrow(pp_mod2), 0, pp_mod2[,7])
+
+pp_mod3 <- posterior_samples(mod3)[,1:4]
+pred_mod3_dg <- pp_mod3[,1] + rnorm(nrow(pp_mod3), 0, pp_mod3[,4])
+pred_mod3_gill <- pp_mod3[,2] + rnorm(nrow(pp_mod3), 0, pp_mod3[,4])
+pred_mod3_gonad <- pp_mod3[,3] + rnorm(nrow(pp_mod3), 0, pp_mod3[,4])
+
+
+
+prediction_intervals <- data.frame(model = c("mod1",
+                "mod2_cat",
+                "mod2_gst",
+                "mod2_hsp70",
+                "mod2_hsp90",
+                "mod2_mt",
+                "mod2_sod",
+                "mod3_dg",
+                "mod3_gill",
+                "mod3_gonad"),
+           l95 = c(quantile(pred_mod1, 0.025),
+                    quantile(pred_mod2_cat, 0.025),
+                    quantile(pred_mod2_gst, 0.025),
+                    quantile(pred_mod2_hsp70, 0.025),
+                    quantile(pred_mod2_hsp90, 0.025),
+                    quantile(pred_mod2_mt, 0.025),
+                    quantile(pred_mod2_sod, 0.025),
+                    quantile(pred_mod3_dg, 0.025),
+                    quantile(pred_mod3_gill, 0.025),
+                    quantile(pred_mod3_gonad, 0.025)),
+           u95 = c(quantile(pred_mod1, 0.975),
+                    quantile(pred_mod2_cat, 0.975),
+                    quantile(pred_mod2_gst, 0.975),
+                    quantile(pred_mod2_hsp70, 0.975),
+                    quantile(pred_mod2_hsp90, 0.975),
+                    quantile(pred_mod2_mt, 0.975),
+                    quantile(pred_mod2_sod, 0.975),
+                    quantile(pred_mod3_dg, 0.975),
+                    quantile(pred_mod3_gill, 0.975),
+                    quantile(pred_mod3_gonad, 0.975)))
+
+
+#write.xlsx(prediction_intervals, "prediction_intervals.xlsx", asTable = TRUE, overwrite = TRUE)
+```
+
+
+Sensitivity analysis - publication bias
+```{r}
+## See 'Methods for testing publication bias in ecological and evolutionary meta-analyses' by Nakagawa et al. 2021 (https://doi.org/10.1111/2041-210X.13724), including correction (https://doi.org/10.1111/2041-210X.13908)
+
+#bias_mod1a <- brm(LRR ~ sqrt_inv_eff_n + (1|maincat) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#summary(bias_mod1a)
+#saveRDS(object = bias_mod1a, file = "bias_mod1a.rds")
+#bias_mod1b <- brm(LRR ~ inv_eff_n + (1|maincat) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#summary(bias_mod1b)
+#saveRDS(object = bias_mod1b, file = "bias_mod1b.rds")
+#bias_mod2a <- brm(LRR ~ sqrt_inv_eff_n*biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#summary(bias_mod2a)
+#saveRDS(object = bias_mod2a, file = "bias_mod2a.rds")
+#bias_mod2b <- brm(LRR ~ inv_eff_n*biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix), data = df, data2 = list(vcv_matrix = vcv_matrix))
+#summary(bias_mod2b)
+#saveRDS(object = bias_mod2b, file = "bias_mod2b.rds")
+#bias_mod3a <- brm(LRR ~ sqrt_inv_eff_n*tissue + (1|maincat_nottissue) + fcor(vcv_matrix), data = subset(df, tissue != "Visceral mass"), data2 = list(vcv_matrix = vcv_matrix))
+#summary(bias_mod3a)
+#saveRDS(object = bias_mod3a, file = "bias_mod3a.rds")
+#bias_mod3b <- brm(LRR ~ inv_eff_n*tissue + (1|maincat_nottissue) + fcor(vcv_matrix), data = subset(df, tissue != "Visceral mass"), data2 = list(vcv_matrix = vcv_matrix))
+#summary(bias_mod3b)
+#saveRDS(object = bias_mod3b, file = "bias_mod3b.rds")
+
+bias_mod1 <- readRDS("bias_mod1a.rds") ## Intercept not 'significantly' different from 0 <-- square root of the inverse effective sample size
+bias_mod2a <- readRDS("bias_mod2a.rds")
+bias_mod2b <- readRDS("bias_mod2b.rds")
+bias_mod3a <- readRDS("bias_mod3a.rds")
+bias_mod3b <- readRDS("bias_mod3b.rds")
+```
+
+
+
+Sensitivity analysis - variance-covariance matrix created with correlation factor 0.1.
+```{r}
+vcv_matrix_01 <- make_VCV_matrix(data=df, V="vLRR", cluster="nonindependence_multipleeffects", obs = "no", type = "vcv", rho = 0.1)
+
+#mod1_01 <- brm(LRR ~ (1|maincat) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod1_01, file = "mod1_01.rds")
+#mod2_01 <- brm(LRR ~ -1 + biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod2_01, file = "mod2_01.rds")
+#mod3_01 <- brm(LRR ~ -1 + tissue + (1|maincat_nottissue) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod3_01, file = "mod3_01.rds")
+#mod4_01 <- brm(LRR ~ log_tu + (1|maincat) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod4_01, file = "mod4_01.rds")
+#mod5_01 <- brm(LRR ~ log_tu*biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod5_01, file = "mod5_01.rds")
+#mod6_01 <- brm(LRR ~ log_tu*tissue + (1|maincat_nottissue) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod6_01, file = "mod6_01.rds")
+#mod7_01 <- brm(LRR ~ log_time + (1|maincat_nottime) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod7_01, file = "mod7_01.rds")
+#mod8_01 <- brm(LRR ~ log_time*biomarker + (1|maincat_notbiomarkertime) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod8_01, file = "mod8_01.rds")
+#mod9_01 <- brm(LRR ~ log_time*tissue + (1|maincat_nottissuetime) + fcor(vcv_matrix_01), data = df, data2 = list(vcv_matrix_01 = vcv_matrix_01))
+#saveRDS(object = mod9_01, file = "mod9_01.rds")
+
+mod1_01 <- readRDS("mod1_01.rds")
+mod2_01 <- readRDS("mod2_01.rds")
+mod3_01 <- readRDS("mod3_01.rds")
+mod4_01 <- readRDS("mod4_01.rds")
+mod5_01 <- readRDS("mod5_01.rds")
+mod6_01 <- readRDS("mod6_01.rds")
+mod7_01 <- readRDS("mod7_01.rds")
+mod8_01 <- readRDS("mod8_01.rds")
+mod9_01 <- readRDS("mod9_01.rds")
+
+summary(mod1_01)
+summary(mod2_01)
+summary(mod3_01)
+summary(mod4_01)
+summary(mod5_01)
+summary(mod6_01)
+summary(mod7_01)
+summary(mod8_01)
+summary(mod9_01)
+
+```
+
+
+Sensitivity analysis - variance-covariance matrix created with correlation factor 0.9.
+```{r}
+vcv_matrix_09 <- make_VCV_matrix(data=df, V="vLRR", cluster="nonindependence_multipleeffects", obs = "no", type = "vcv", rho = 0.9)
+
+#mod1_09 <- brm(LRR ~ (1|maincat) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod1_09, file = "mod1_09.rds")
+#mod2_09 <- brm(LRR ~ -1 + biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod2_09, file = "mod2_09.rds")
+#mod3_09 <- brm(LRR ~ -1 + tissue + (1|maincat_nottissue) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod3_09, file = "mod3_09.rds")
+#mod4_09 <- brm(LRR ~ log_tu + (1|maincat) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod4_09, file = "mod4_09.rds")
+#mod5_09 <- brm(LRR ~ log_tu*biomarker + (1|maincat_notbiomarker) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod5_09, file = "mod5_09.rds")
+#mod6_09 <- brm(LRR ~ log_tu*tissue + (1|maincat_nottissue) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod6_09, file = "mod6_09.rds")
+#mod7_09 <- brm(LRR ~ log_time + (1|maincat_nottime) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod7_09, file = "mod7_09.rds")
+#mod8_09 <- brm(LRR ~ log_time*biomarker + (1|maincat_notbiomarkertime) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod8_09, file = "mod8_09.rds")
+#mod9_09 <- brm(LRR ~ log_time*tissue + (1|maincat_nottissuetime) + fcor(vcv_matrix_09), data = df, data2 = list(vcv_matrix_09 = vcv_matrix_09))
+#saveRDS(object = mod9_09, file = "mod9_09.rds")
+
+mod1_09 <- readRDS("mod1_09.rds")
+mod2_09 <- readRDS("mod2_09.rds")
+mod3_09 <- readRDS("mod3_09.rds")
+mod4_09 <- readRDS("mod4_09.rds")
+mod5_09 <- readRDS("mod5_09.rds")
+mod6_09 <- readRDS("mod6_09.rds")
+mod7_09 <- readRDS("mod7_09.rds")
+mod8_09 <- readRDS("mod8_09.rds")
+mod9_09 <- readRDS("mod9_09.rds")
+
+summary(mod1_09)
+summary(mod2_09)
+summary(mod3_09)
+summary(mod4_09)
+summary(mod5_09)
+summary(mod6_09)
+summary(mod7_09)
+summary(mod8_09)
+summary(mod9_09)
+```
+

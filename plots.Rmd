@@ -1,0 +1,2239 @@
+---
+title: "plots"
+author: "Gustaf M.O. Ekelund Ugge"
+date: '2022-09-06'
+output: pdf_document
+---
+
+Packages
+```{r}
+library('openxlsx')
+library('ggplot2')
+library('ggpubr')
+library('ggbeeswarm')
+library('grid')
+library('brms')
+library('tidybayes')
+library('dplyr')
+```
+
+
+Dataset
+```{r}
+df <- read.xlsx('dataset.xlsx')
+df$sLRR <- sqrt(df$vLRR)
+df$log_time <- log(df$time, 2)
+df$effective_samplesize <- (4*df$n*df$n_control_adjusted)/(df$n+df$n_control_adjusted) ## see Nakagawa et al. 2021, 'Methods for testing publication bias in ecological and evolutionary meta-analyses', Methods Ecol Evol
+df$inv_eff_n <- 1/df$effective_samplesize
+df$sqrt_inv_eff_n <- sqrt(df$inv_eff_n)
+df$maincat <- paste(df$study,df$species,df$tissue,df$biomarker,df$time)
+df$maincat_notbiomarker<- paste(df$study,df$species,df$tissue,df$time)
+df$maincat_nottissue<- paste(df$study,df$species,df$biomarker,df$time)
+df$maincat_nottime <- paste(df$study,df$species,df$tissue,df$biomarker)
+df$maincat_notbiomarkertime <- paste(df$study,df$species,df$tissue)
+df$maincat_nottissuetime <- paste(df$study,df$species,df$biomarker)
+df$nonindependence_multipleeffects <- paste(df$study, df$toxicant, df$concentration)
+summary(df)
+
+## Addition of toxic unit (calculated in separate script and exported to 'toxic_unit.xlsx')
+toxicunit <- read.xlsx('toxic_unit.xlsx')
+x <- 1:nrow(df)
+df$tu <- x
+
+for (val in x) {
+  if (df$toxicant[val] == "Ag+") {
+    df$tu[val] <- df$concentration[val]/toxicunit[1,2]
+  } else {
+  if (df$toxicant[val] == "Ag (bulk)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[1,2]
+  } else {
+  if (df$toxicant[val] == "As(III)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[2,2]
+  } else {
+  if (df$toxicant[val] == "As(V)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[3,2]
+  } else {
+  if (df$toxicant[val] == "Cd") {
+    df$tu[val] <- df$concentration[val]/toxicunit[4,2]
+  } else {
+  if (df$toxicant[val] == "Cr(VI)") {
+    df$tu[val] <- df$concentration[val]/toxicunit[5,2]
+  } else {
+  if (df$toxicant[val] == "Cu") {
+    df$tu[val] <- df$concentration[val]/toxicunit[6,2]
+  } else {
+  if (df$toxicant[val] == "Gd") {
+    df$tu[val] <- df$concentration[val]/toxicunit[7,2]
+  } else {
+  if (df$toxicant[val] == "Hg") {
+    df$tu[val] <- df$concentration[val]/toxicunit[8,2]
+  } else {
+  if (df$toxicant[val] == "Ni") {
+    df$tu[val] <- df$concentration[val]/toxicunit[9,2]
+  } else {
+  if (df$toxicant[val] == "Pb") {
+    df$tu[val] <- df$concentration[val]/toxicunit[10,2]
+  } else {
+  if (df$toxicant[val] == "Sm") {
+    df$tu[val] <- df$concentration[val]/toxicunit[11,2]
+  } else {
+  if (df$toxicant[val] == "Y") {
+    df$tu[val] <- df$concentration[val]/toxicunit[12,2]
+  } else {
+  if (df$toxicant[val] == "Zn") {
+    df$tu[val] <- df$concentration[val]/toxicunit[13,2]
+  } else {
+    df$tu[val] <- NA }}}}}}}}}}}}}}}
+df$log_tu <- log(df$tu, 10)
+
+## Removal of tissue-specific effects of visceral mass (only one study)
+for (val in x) {
+  if (df$tissue[val] == "Visceral mass") {
+    df$tissue[val] <- NA} else {
+    df$tissue[val] <- df$tissue[val]}}
+```
+
+
+Model data
+```{r}
+mod1 <- readRDS("mod1.rds")
+mod2 <- readRDS("mod2.rds")
+mod3 <- readRDS("mod3.rds")
+mod4 <- readRDS("mod4.rds")
+mod5 <- readRDS("mod5.rds")
+mod6 <- readRDS("mod6.rds")
+mod7 <- readRDS("mod7.rds")
+mod8 <- readRDS("mod8.rds")
+mod9 <- readRDS("mod9.rds")
+mod1_plotdata <- summary(mod1)$fixed
+mod1_plotdata <- as.data.frame(mod1_plotdata)
+mod2_plotdata <- summary(mod2)$fixed
+mod2_plotdata <- as.data.frame(mod2_plotdata)
+mod3_plotdata <- summary(mod3)$fixed
+mod3_plotdata <- as.data.frame(mod3_plotdata)
+mod4_plotdata <- conditional_effects(mod4)
+mod4_slopes <- as.data.frame(fixef(mod4))
+mod4_slopes <- mod4_slopes[2,]
+mod5_plotdata <- conditional_effects(mod5, "log_tu:biomarker")
+mod5_slopes <- as.data.frame(rbind(fixef(mod5)[2,],fixef(mod5)[8:12,] + fixef(mod5)[2,1]))
+mod5_slopes$Est.Error[2:6] <- fixef(mod5)[8:12,2]
+mod5_slopes$Biomarker <- c("cat","gst","hsp70","hsp90","mt","sod")
+mod6_plotdata <- conditional_effects(mod6, "log_tu:tissue")
+mod6_slopes <- as.data.frame(rbind(fixef(mod6)[2,],fixef(mod6)[5:6,] + fixef(mod6)[2,1]))
+mod6_slopes$Est.Error[2:3] <- fixef(mod6)[5:6,2]
+mod6_slopes$Tissue <- c("Digestive gland","Gills","Gonads")
+mod7_plotdata <- conditional_effects(mod7)
+mod7_slopes <- as.data.frame(fixef(mod7))
+mod7_slopes <- mod7_slopes[2,]
+mod8_plotdata <- conditional_effects(mod8, "log_time:biomarker")
+mod8_slopes <- as.data.frame(rbind(fixef(mod8)[2,],fixef(mod8)[8:12,] + fixef(mod8)[2,1]))
+mod8_slopes$Est.Error[2:6] <- fixef(mod8)[8:12,2]
+mod8_slopes$Biomarker <- c("cat","gst","hsp70","hsp90","mt","sod")
+mod9_plotdata <- conditional_effects(mod9, "log_time:tissue")
+mod9_slopes <- as.data.frame(rbind(fixef(mod9)[2,],fixef(mod9)[5:6,] + fixef(mod9)[2,1]))
+mod9_slopes$Est.Error[2:3] <- fixef(mod9)[5:6,2]
+mod9_slopes$Tissue <- c("Digestive gland","Gills","Gonads")
+
+heterogeneity <- read.xlsx('heterogeneity.xlsx')
+prediction_intervals <- read.xlsx('prediction_intervals.xlsx')
+```
+
+
+General plot parameters
+```{r}
+ci_transparency <- 0.25
+point_transparency <- 0.4
+labels_biomarker <- c("cat","gst","hsp70","hsp90","mt","sod")
+labels_tissue <- c("Digestive gland","Gills","Gonads")
+color_biomarkers <- c("red","orange", "green","cyan3","blue","purple")
+labels_lrr <- "lnRR"
+labels_tu <- "Toxic unit"
+labels_time <- "Exposure time"
+labels_slopes <- c("Toxic unit", "Exposure time")
+labels_res <- "Model residuals"
+blank <- grobTree(text_grob(""))
+```
+
+
+Model 1 - overall effects
+```{r}
+plot_mod1 <- ggplot(df, aes(x=LRR, y = 1)) +
+  theme_classic() +
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency, cex = 3, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1,xmin = `l-95% CI`, xmax = `u-95% CI`), data = mod1_plotdata) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.975, xend = u95, yend = 0.975), data = prediction_intervals[1,]) +
+  guides(size = "none", alpha = "none") +
+  annotate("text", x = 3, y = 1.45, hjust = 0, label = c("italic(k) == 22"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.35, hjust = 0, label = c("italic(n) == 396"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[1,2],0),"*\'%\'")), parse = TRUE)
+plot_mod1
+```
+
+
+Model 2 - transcript-specific overall effects
+```{r}
+plot_mod2_cat <-  ggplot(subset(df, biomarker == "cat"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("cat") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "cat"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_plotdata[1,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.95, xend = u95, yend = 0.95), data = prediction_intervals[2,]) +
+  annotate("text", x = 3, y = 1.45, hjust = 0, label = c("italic(k) == 9"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.35, hjust = 0, label = c("italic(n) == 73"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[2,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod2_gst <-  ggplot(subset(df, biomarker == "gst"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("gst") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "gst"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_plotdata[2,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.95, xend = u95, yend = 0.95), data = prediction_intervals[3,]) +
+  annotate("text", x = 3, y = 1.45, hjust = 0, label = c("italic(k) == 7"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.35, hjust = 0, label = c("italic(n) == 73"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[3,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod2_hsp70 <-  ggplot(subset(df, biomarker == "hsp70"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("hsp70") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "hsp70"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_plotdata[3,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.95, xend = u95, yend = 0.95), data = prediction_intervals[4,]) +
+  annotate("text", x = 3, y = 1.45, hjust = 0, label = c("italic(k) == 5"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.35, hjust = 0, label = c("italic(n) == 37"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[4,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod2_hsp90 <-  ggplot(subset(df, biomarker == "hsp90"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("hsp90") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "hsp90"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_plotdata[4,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.95, xend = u95, yend = 0.95), data = prediction_intervals[5,]) +
+  annotate("text", x = 3, y = 1.45, hjust = 0, label = c("italic(k) == 4"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.35, hjust = 0, label = c("italic(n) == 41"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[5,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod2_mt <-  ggplot(subset(df, biomarker == "mt"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("mt") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "mt"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_plotdata[5,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.95, xend = u95, yend = 0.95), data = prediction_intervals[6,]) +
+  annotate("text", x = 3, y = 1.45, hjust = 0, label = c("italic(k) == 15"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.35, hjust = 0, label = c("italic(n) == 108"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[6,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod2_sod <-  ggplot(subset(df, biomarker == "sod"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("sod") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "sod"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_plotdata[6,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.95, xend = u95, yend = 0.95), data = prediction_intervals[7,]) +
+  annotate("text", x = 3, y = 1.45, hjust = 0, label = c("italic(k) == 7"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.35, hjust = 0, label = c("italic(n) == 64"), parse = TRUE)+
+  annotate("text", x = 3, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[7,2],0),"*\'%\'")), parse = TRUE)
+
+
+
+plot_mod2 <- ggarrange(plot_mod2_cat, plot_mod2_gst,plot_mod2_hsp70,plot_mod2_hsp90,plot_mod2_mt,plot_mod2_sod,
+                       labels = c("A", "B","C", "D", "E", "F"), 
+                       ncol = 3, nrow = 2)
+plot_mod2
+```
+
+
+Model 3 - tissue-specific overall effects
+```{r}
+plot_mod3_dg <-  ggplot(subset(df, tissue == "Digestive gland"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Digestive gland"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_plotdata[1,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = -3, xend = u95, yend = -3), data = prediction_intervals[8,]) +
+  annotate("text", x = 3.5, y = 25, hjust = 0, label = c("italic(k) == 11"), parse = TRUE)+
+  annotate("text", x = 3.5, y = 17.5, hjust = 0, label = c("italic(n) == 142"), parse = TRUE)+
+  annotate("text", x = 3.5, y = 10, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[8,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod3_gills <-  ggplot(subset(df, tissue == "Gills"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Gills"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_plotdata[2,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.965, xend = u95, yend = 0.965), data = prediction_intervals[9,]) +
+  annotate("text", x = 3.5, y = 1.45, hjust = 0, label = c("italic(k) == 14"), parse = TRUE)+
+  annotate("text", x = 3.5, y = 1.35, hjust = 0, label = c("italic(n) == 214"), parse = TRUE)+
+  annotate("text", x = 3.5, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[9,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod3_gonads <-  ggplot(subset(df, tissue == "Gonads"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Gonads"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_plotdata[3,])) +
+  geom_segment(aes(size = 0.05, x = l95, y = 0.965, xend = u95, yend = 0.965), data = prediction_intervals[10,]) +
+  annotate("text", x = 3.5, y = 1.45, hjust = 0, label = c("italic(k) == 3"), parse = TRUE)+
+  annotate("text", x = 3.5, y = 1.35, hjust = 0, label = c("italic(n) == 37"), parse = TRUE)+
+  annotate("text", x = 3.5, y = 1.25, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[10,2],0),"*\'%\'")), parse = TRUE)
+
+
+plot_mod3 <- ggarrange(plot_mod3_dg, plot_mod3_gills,plot_mod3_gonads,
+                       labels = c("A", "B","C"), 
+                       ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom")
+plot_mod3
+```
+
+
+Model 4 - overall concentration-dependence
+```{r}
+plot_mod4 <- ggplot(mod4_plotdata$log_tu, aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 19"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 338"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[11,2],0),"*\'%\'")), parse = TRUE)
+
+ggplot(df, aes(x=log_tu, y=LRR)) +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency)
+
+plot_mod4_slopes <- ggplot(mod4_slopes, aes(y= 1, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  theme(legend.position = "none")
+
+plot_mod4
+#plot_mod4_slopes
+```
+
+
+Model 5 - transcript-specific concentration-dependence
+```{r}
+# CI cut off to min/max LRR in plot
+mod5_plotdata$`log_tu:biomarker`$lower__[mod5_plotdata$`log_tu:biomarker`$lower__ < min(df$LRR)] <- min(df$LRR)
+mod5_plotdata$`log_tu:biomarker`$lower__[mod5_plotdata$`log_tu:biomarker`$lower__ > max(df$LRR)] <- max(df$LRR)
+
+
+plot_mod5_cat <- ggplot(subset(mod5_plotdata$`log_tu:biomarker`, biomarker== "cat"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("cat") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR),colour = color_biomarkers[1]), data = subset(df, biomarker == "cat"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 6"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 60"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[12,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod5_gst <- ggplot(subset(mod5_plotdata$`log_tu:biomarker`, biomarker== "gst"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("gst") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[2]), data = subset(df, biomarker == "gst"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 5"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 54"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[13,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod5_hsp70 <- ggplot(subset(mod5_plotdata$`log_tu:biomarker`, biomarker== "hsp70"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp70") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[3]), data = subset(df, biomarker == "hsp70"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 5"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 37"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[14,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod5_hsp90 <- ggplot(subset(mod5_plotdata$`log_tu:biomarker`, biomarker== "hsp90"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp90") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[4]), data = subset(df, biomarker == "hsp90"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 4"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 41"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[15,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod5_mt <- ggplot(subset(mod5_plotdata$`log_tu:biomarker`, biomarker== "mt"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("mt") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[5]), data = subset(df, biomarker == "mt"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 12"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 95"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[16,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod5_sod <- ggplot(subset(mod5_plotdata$`log_tu:biomarker`, biomarker== "sod"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("sod") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[6]), data = subset(df, biomarker == "sod"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 4"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 51"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[17,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod5_slopes <- ggplot(mod5_slopes, aes(y= reorder(Biomarker, desc(Biomarker)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3, colour = Biomarker))+#, alpha = point_transparency) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod5_slopes$Estimate), y = c(6.15, 5.15, 4.15, 3.15, 2.15, 1.15), label = labels_biomarker, fontface = "italic") +
+  theme(legend.position = "none")
+
+plot_mod5 <- ggarrange(ggarrange(plot_mod5_cat, plot_mod5_gst,plot_mod5_hsp70,plot_mod5_hsp90,plot_mod5_mt,plot_mod5_sod,
+                       labels = c("A", "B","C", "D", "E", "F"), 
+                       ncol = 3, nrow = 2), plot_mod5_slopes, labels = c("","G"),ncol=2,nrow=1, widths = c(4,1))
+
+plot_mod5
+```
+
+
+Model 6 - tissue-specific concentration-dependence
+```{r}
+plot_mod6_dg <- ggplot(subset(mod6_plotdata$'log_tu:tissue', tissue == "Digestive gland"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Digestive gland"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 9"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 94"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[18,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod6_gills <- ggplot(subset(mod6_plotdata$'log_tu:tissue', tissue == "Gills"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gills"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 13"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 207"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[19,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod6_gonads <- ggplot(subset(mod6_plotdata$'log_tu:tissue', tissue == "Gonads"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gonads"), alpha = point_transparency) +
+  annotate("text", x = -3, y = 5.5, hjust = 0, label = c("italic(k) == 3"), parse = TRUE)+
+  annotate("text", x = -3, y = 4.5, hjust = 0, label = c("italic(n) == 37"), parse = TRUE)+
+  annotate("text", x = -3, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[20,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod6_slopes <- ggplot(mod6_slopes, aes(y= reorder(Tissue, desc(Tissue)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), alpha = point_transparency) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod6_slopes$Estimate), y = c(3.15, 2.15, 1.15), label = labels_tissue) +
+  theme(legend.position = "none")
+
+plot_mod6 <- ggarrange(ggarrange(plot_mod6_dg, plot_mod6_gills,plot_mod6_gonads,
+                       labels = c("A", "B","C"), 
+                       ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom"), 
+                       plot_mod6_slopes,labels = c("","D"), ncol=2, nrow=1, widths =c(4,1))
+
+plot_mod6
+```
+
+
+Model 7 - overall time-dependence
+```{r}
+plot_mod7 <- ggplot(mod7_plotdata$log_time, aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10)) +
+  theme(legend.position = "none")+
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 22"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 396"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[21,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod7_slopes <- ggplot(mod7_slopes, aes(y= 1, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog(Exposure time))", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  theme(legend.position = "none")
+
+plot_mod7
+```
+
+
+Model8 - transcript-specific time-dependence
+```{r}
+# CI cut off to min/max LRR for plots
+mod8_plotdata$`log_time:biomarker`$lower__[mod8_plotdata$`log_time:biomarker`$lower__ < min(df$LRR)] <- min(df$LRR)
+mod8_plotdata$`log_time:biomarker`$lower__[mod8_plotdata$`log_time:biomarker`$lower__ > max(df$LRR)] <- max(df$LRR)
+
+
+
+plot_mod8_cat <- ggplot(subset(mod8_plotdata$`log_time:biomarker`, biomarker== "cat"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("cat") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR),colour = color_biomarkers[1]), data = subset(df, biomarker == "cat"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 9"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 73"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[22,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod8_gst <- ggplot(subset(mod8_plotdata$`log_time:biomarker`, biomarker== "gst"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("gst") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[2]), data = subset(df, biomarker == "gst"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 7"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 73"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[23,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod8_hsp70 <- ggplot(subset(mod8_plotdata$`log_time:biomarker`, biomarker== "hsp70"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp70") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[3]), data = subset(df, biomarker == "hsp70"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 5"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 37"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[24,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod8_hsp90 <- ggplot(subset(mod8_plotdata$`log_time:biomarker`, biomarker== "hsp90"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp90") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[4]), data = subset(df, biomarker == "hsp90"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 4"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 41"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[25,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod8_mt <- ggplot(subset(mod8_plotdata$`log_time:biomarker`, biomarker== "mt"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("mt") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[5]), data = subset(df, biomarker == "mt"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 15"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 108"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[26,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod8_sod <- ggplot(subset(mod8_plotdata$`log_time:biomarker`, biomarker== "sod"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("sod") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[6]), data = subset(df, biomarker == "sod"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 7"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 64"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[27,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod8_slopes <- ggplot(mod8_slopes, aes(y= reorder(Biomarker, desc(Biomarker)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3, colour = Biomarker))+#, alpha = point_transparency) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog Exposure time)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod8_slopes$Estimate), y = c(6.15, 5.15, 4.15, 3.15, 2.15, 1.15), label = labels_biomarker, fontface = "italic") +
+  theme(legend.position = "none")
+
+plot_mod8 <- ggarrange(ggarrange(plot_mod8_cat, plot_mod8_gst,plot_mod8_hsp70,plot_mod8_hsp90,plot_mod8_mt,plot_mod8_sod,
+                                 labels = c("A", "B","C", "D", "E", "F"), 
+                                 ncol = 3, nrow = 2), plot_mod8_slopes, labels = c("","G"),ncol=2,nrow=1, widths = c(4,1))
+
+plot_mod8
+```
+
+
+Model 9 - tissue-specific time-dependence
+```{r}
+plot_mod9_dg <- ggplot(subset(mod9_plotdata$'log_time:tissue', tissue == "Digestive gland"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Digestive gland"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 11"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 142"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[28,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod9_gills <- ggplot(subset(mod9_plotdata$'log_time:tissue', tissue == "Gills"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gills"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 14"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 214"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[29,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod9_gonads <- ggplot(subset(mod9_plotdata$'log_time:tissue', tissue == "Gonads"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gonads"), alpha = point_transparency) +
+  annotate("text", x = -0.5, y = 5.5, hjust = 0, label = c("italic(k) == 3"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 4.5, hjust = 0, label = c("italic(n) == 37"), parse = TRUE)+
+  annotate("text", x = -0.5, y = 3.5, hjust = 0, label = c(paste("I^2 == ", round(heterogeneity[30,2],0),"*\'%\'")), parse = TRUE)
+
+plot_mod9_slopes <- ggplot(mod9_slopes, aes(y= reorder(Tissue, desc(Tissue)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), alpha = point_transparency) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog Exposure time)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod9_slopes$Estimate), y = c(3.15, 2.15, 1.15), label = labels_tissue) +
+  theme(legend.position = "none")
+
+plot_mod9 <- ggarrange(ggarrange(plot_mod9_dg, plot_mod9_gills,plot_mod9_gonads,
+                                 labels = c("A", "B","C"), 
+                                 ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom"), 
+                       plot_mod9_slopes,labels = c("","D"), ncol=2, nrow=1, widths =c(4,1))
+
+plot_mod9
+```
+
+
+Models 1, 4, 7 - all overall effects
+```{r}
+mod4_mod7_slopes <- rbind.data.frame(mod4_slopes,mod7_slopes)
+mod4_mod7_slopes$continuous <- c("log_tu","log_time")
+
+plot_mod4_mod7_slopes <- ggplot(mod4_mod7_slopes, aes(y=continuous, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope", limits = c(-1, 1),
+                     breaks = c(-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod4_mod7_slopes$Estimate), y = c(2.35, 1.35), label = c("Toxic unit","Exposure time")) +
+  theme(legend.position = "none")
+
+
+plot_overall <- ggarrange(plot_mod1, ggarrange(plot_mod4, plot_mod7, labels = c("B","C"),
+                                                         ncol=2, nrow=1),
+                                               plot_mod4_mod7_slopes, labels = c("A","","D"),
+                                               ncol=1, nrow= 3, heights = c(3,2.5,1),
+                                     common.legend = TRUE, legend = "bottom")
+
+
+plot_overall
+```
+
+Models 1, 4, 7 - graphical abstract
+```{r}
+
+plot_graphical_abstract <- ggarrange(plot_mod1 + ggtitle("Overall effect") + theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)),
+                                     plot_mod4 + ggtitle("Concentration-dependence") + theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)),
+                                     plot_mod7 + ggtitle("Time-dependence") + theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)),
+                                     ncol = 3, nrow=1, common.legend = TRUE, legend = "right")
+
+plot_graphical_abstract
+```
+
+
+Models 3, 6, 9 - all tissue-specific effects
+```{r}
+plot_tissue_slopes <- ggplot(mod6_slopes, aes(y= reorder(Tissue, desc(Tissue)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  geom_pointinterval(aes(y= as.numeric(reorder(mod9_slopes$Tissue, desc(mod9_slopes$Tissue)))-0.3,
+                         x = Estimate, xmin = Q2.5, xmax = Q97.5, size = 3),
+                     mod9_slopes) +
+  annotate("text", x = 0, y = c(3.4, 2.4, 1.4), label = labels_tissue, size = 4, fontface = "bold") +
+  annotate("text", x = c(mod6_slopes$Estimate[1], mod9_slopes$Estimate[1], mod6_slopes$Estimate[2],
+                         mod9_slopes$Estimate[2], mod6_slopes$Estimate[3], mod9_slopes$Estimate[3]), 
+           y = c(3.125, 2.825, 2.125, 1.825, 1.125, 0.825),
+           label = c(labels_slopes,labels_slopes,labels_slopes)) +
+  theme(legend.position = "none")
+
+title_dg <- grobTree(text_grob("Digestive gland", just = "centre", face = "bold", size = 15, rot = 90))
+title_gill <- grobTree(text_grob("Gills", just = "centre", face = "bold", size = 15,  rot = 90))
+title_gonads <- grobTree(text_grob("Gonads", just = "centre", face = "bold", size = 15,  rot = 90))
+title_tissues <- ggarrange(title_dg, title_gill, title_gonads, blank,
+                           ncol = 1, nrow = 4, heights = c(3.5,4,4.25,1.25))
+title_intercept <- grobTree(text_grob("Overall effect", just = "centre", face = "bold", size = 15))
+title_tu <- grobTree(text_grob("Concentration-dependence", just = "centre", face = "bold", size = 15))
+title_time <- grobTree(text_grob("Time-dependence", just = "centre", face = "bold", size = 15))
+title_modeltypes <- ggarrange(blank, ggarrange(blank, title_intercept,title_tu,title_time,blank,
+                              ncol=5, nrow =5, widths = c(1,6,4.5,6,3.5)),
+                              ncol=1, nrow=2, heights = c(1,4))
+
+plot_tissue <- ggarrange(title_modeltypes, ggarrange(title_tissues,
+                        ggarrange(plot_mod3_dg,plot_mod6_dg,plot_mod9_dg,
+                                   plot_mod3_gills,plot_mod6_gills,plot_mod9_gills,
+                                   plot_mod3_gonads,plot_mod6_gonads,plot_mod9_gonads,
+                                   labels = c("A","B","C","D","E","F","G","H","I"),
+                                  ncol=3, nrow=3, common.legend=TRUE, legend = "bottom"),
+                                  plot_tissue_slopes, labels=c("","","J"),
+                        ncol=3, nrow=1, widths=c(1,16,4)),
+                         ncol = 1, nrow =2, heights = c(1,20))
+
+plot_tissue
+```
+
+
+Sensitivity analysis - publication bias
+```{r}
+## See 'Methods for testing publication bias in ecological and evolutionary meta-analyses' by Nakagawa et al. 2021 (https://doi.org/10.1111/2041-210X.13724), including correction (https://doi.org/10.1111/2041-210X.13908)
+
+bias_mod1 <- readRDS("bias_mod1a.rds") ## Intercept not 'significantly' different from 0 <-- ~ square root of the inverse effective sample size
+bias_mod2a <- readRDS("bias_mod2a.rds")
+bias_mod2b <- readRDS("bias_mod2b.rds")
+bias_mod3a <- readRDS("bias_mod3a.rds")
+bias_mod3b <- readRDS("bias_mod3b.rds")
+
+bias_mod1_intercept <- as.data.frame(summary(bias_mod1)$fixed[1,1:4])
+bias_mod1_intercept$category <- "Overall effect"
+colnames(bias_mod1_intercept) <- c("Estimate", "Est.Error","Q2.5","Q97.5","category")
+bias_mod1_intercept
+
+bias_mod2a_effects <- as.data.frame(rbind(fixef(bias_mod2a)[1,], fixef(bias_mod2a)[3:7,] + fixef(bias_mod2a)[1,1]))
+bias_mod2a_effects$Est.Error[2:6] <- fixef(bias_mod2a)[3:7,2]
+bias_mod2a_effects$category <- c("cat","gst","hsp70","hsp90","mt","sod")
+bias_mod2a_effects
+## mt intercept does not overlap 0 --> bias_mod2b (~ inverse effective sample size) for mt; bias_mod2a (~ square root of inverse effective sample size) for remaining markers
+
+bias_mod2b_effects <- as.data.frame(rbind(fixef(bias_mod2b)[1,], fixef(bias_mod2b)[3:7,] + fixef(bias_mod2b)[1,1]))
+bias_mod2b_effects$Est.Error[2:6] <- fixef(bias_mod2b)[3:7,2]
+bias_mod2b_effects$category <- c("cat","gst","hsp70","hsp90","mt","sod")
+bias_mod2b_effects
+
+bias_mod2_intercept <- rbind(bias_mod2a_effects[1:4,], bias_mod2b_effects[5,], bias_mod2a_effects[6,])
+bias_mod2_intercept
+
+bias_mod3a_effects <- as.data.frame(rbind(fixef(bias_mod3a)[1,],fixef(bias_mod3a)[3:4,] + fixef(bias_mod3a)[1,1]))
+bias_mod3a_effects$Est.Error[2:3] <- fixef(bias_mod3a)[3:4,2]
+bias_mod3a_effects$category <- c("Digestive gland","Gills","Gonads")
+bias_mod3a_effects
+## Digestive gland intercept does not overlap 0 --> bias_mod3b (~ inverse effective sample size) for digestive gland; bias_mod3a (~ square root of inverse effective sample size) for gills and gonads
+
+bias_mod3b_effects <- as.data.frame(rbind(fixef(bias_mod3b)[1,],fixef(bias_mod3b)[3:4,] + fixef(bias_mod3b)[1,1]))
+bias_mod3b_effects$Est.Error[2:3] <- fixef(bias_mod3b)[3:4,2]
+bias_mod3b_effects$category <- c("Digestive gland","Gills","Gonads")
+bias_mod3b_effects
+
+bias_mod3_intercept <- rbind(bias_mod3b_effects[1,], bias_mod3a_effects[2:3,])
+bias_mod3_intercept
+
+original_models_intercept <- rbind(as.data.frame(summary(mod1)$fixed[1,1:4]), 
+                        as.data.frame(summary(mod2)$fixed[,1:4]), 
+                        as.data.frame(summary(mod3)$fixed[,1:4]))
+original_models_intercept$category <- c("Overall effect", "cat", "gst", "hsp70", "hsp90", "mt", "sod", "Digestive gland", "Gills", "Gonads")
+colnames(original_models_intercept) <- c("Estimate", "Est.Error","Q2.5","Q97.5","category")
+
+
+bias_intercept <- rbind(bias_mod1_intercept, bias_mod2_intercept, bias_mod3_intercept, original_models_intercept)
+bias_intercept$no <- c(12.5,10,9,8,7,6,5,2.5,1.5,0.5,12.25,9.75,8.75,7.75,6.75,5.75,4.75,2.25,1.25,0.25)
+bias_intercept
+
+
+#bias_test_tu <- brm(inv_eff_n ~ log_tu, data = df)
+#summary(bias_test_tu)
+#saveRDS(object = bias_test_tu, file = "bias_test_tu.rds")
+bias_test_tu <- readRDS("bias_test_tu.rds")
+bias_test_tu_plot <- conditional_effects(bias_test_tu)
+#bias_test_time <- brm(inv_eff_n ~ log_time, data = df)
+#summary(bias_test_time)
+#saveRDS(object = bias_test_time, file = "bias_test_time.rds")
+bias_test_time <- readRDS("bias_test_time.rds")
+bias_test_time_plot <- conditional_effects(bias_test_time)
+
+
+funnelplot_lrr <- ggplot(df, aes(x=LRR, y = effective_samplesize)) +
+  theme_classic()+
+  geom_point(aes(colour=biomarker), data = df, alpha = point_transparency, cex = 3) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers)+
+  geom_vline(xintercept = 0, colour= "gray", linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(-max(df$LRR), max(df$LRR)), breaks = c(-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "Effective sample size")
+
+densityplot_lrr <- ggplot(df) +
+  theme_classic()+
+  geom_density(aes(x=df$LRR, y = stat(count)),fill = "lightblue", alpha = 0.1)+
+  geom_vline(xintercept = 0, colour= "gray", linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(-max(df$LRR), max(df$LRR)), breaks = c(-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +   scale_y_continuous(name = "Count")
+
+bias_intercept$color <- c("black",color_biomarkers,"black","black","black",
+                          "grey","grey","grey","grey","grey","grey","grey","grey","grey","grey")
+bias_intercept$fontface <- c("bold","italic","italic","italic","italic","italic","italic","plain","plain","plain")
+plot_bias_test_intercepts <- ggplot(bias_intercept, aes(y= no, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  ggtitle("Adjusted effect estimate") +
+  theme(plot.title = element_text(face = "bold", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), colour = bias_intercept$color) +
+  scale_x_continuous(name = labels_lrr, limits = c(min(bias_intercept$Q2.5),-min(bias_intercept$Q2.5)),
+                     breaks = c(-10,-8,-6,-4,-2,0,2,4,6,8,10)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = bias_intercept$Estimate[1:10], y = bias_intercept$no[1:10]+0.5, label = bias_intercept$category[1:10], fontface = bias_intercept$fontface[1:10]) +
+  annotate("text", x = c(median(bias_intercept[2:7,1]), median(bias_intercept[8:10,1])), y = c(bias_intercept[2,6]+1.25, bias_intercept[8,6]+1.25),
+           label = c("Transcripts", "Tissues"), fontface = "bold")
+
+plot_bias <- ggarrange(ggarrange(funnelplot_lrr + theme(legend.position = "none"),
+                       densityplot_lrr, labels = c("A","B"),ncol = 1, nrow = 2, heights = c(3,1)),
+                       plot_bias_test_intercepts, 
+                       labels = c("","C"), ncol = 2, nrow = 1, widths = c(3,2))
+
+plot_bias_test_tu <- ggplot(data = bias_test_tu_plot$log_tu, aes(x=log_tu, y = estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic()+
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) +
+  scale_y_continuous(name = "1/Effective sample size") +
+  geom_point(aes(x = log_tu, y = inv_eff_n), colour="black", alpha = 0.07, cex =3, data = df)
+
+
+plot_bias_test_time <- ggplot(data = bias_test_time_plot$log_time, aes(x=log_time, y = estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic()+
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) +
+  scale_y_continuous(name = "1/Effective sample size") +
+  geom_point(aes(x = log_time, y = inv_eff_n), colour="black", alpha = 0.07, cex = 3, data = df)
+
+plot_bias_test <- ggarrange(plot_bias_test_tu, plot_bias_test_time,
+                            labels = c("A","B"), ncol = 2, nrow = 1)
+
+plot_bias
+plot_bias_test
+```
+
+
+
+Sensitivity analysis - non-independence. Covariance based on correlation factor of 0.1.
+```{r}
+mod1_01 <- readRDS("mod1_01.rds")
+mod2_01 <- readRDS("mod2_01.rds")
+mod3_01 <- readRDS("mod3_01.rds")
+mod4_01 <- readRDS("mod4_01.rds")
+mod5_01 <- readRDS("mod5_01.rds")
+mod6_01 <- readRDS("mod6_01.rds")
+mod7_01 <- readRDS("mod7_01.rds")
+mod8_01 <- readRDS("mod8_01.rds")
+mod9_01 <- readRDS("mod9_01.rds")
+mod1_01_plotdata <- summary(mod1_01)$fixed
+mod1_01_plotdata <- as.data.frame(mod1_01_plotdata)
+mod2_01_plotdata <- summary(mod2_01)$fixed
+mod2_01_plotdata <- as.data.frame(mod2_01_plotdata)
+mod3_01_plotdata <- summary(mod3_01)$fixed
+mod3_01_plotdata <- as.data.frame(mod3_01_plotdata)
+mod4_01_plotdata <- conditional_effects(mod4_01)
+mod4_01_slopes <- as.data.frame(fixef(mod4_01))
+mod4_01_slopes <- mod4_01_slopes[2,]
+mod5_01_plotdata <- conditional_effects(mod5_01, "log_tu:biomarker")
+mod5_01_slopes <- as.data.frame(rbind(fixef(mod5_01)[2,],fixef(mod5_01)[8:12,] + fixef(mod5_01)[2,1]))
+mod5_01_slopes$Est.Error[2:6] <- fixef(mod5_01)[8:12,2]
+mod5_01_slopes$Biomarker <- c("cat","gst","hsp70","hsp90","mt","sod")
+mod6_01_plotdata <- conditional_effects(mod6_01, "log_tu:tissue")
+mod6_01_slopes <- as.data.frame(rbind(fixef(mod6_01)[2,],fixef(mod6_01)[5:6,] + fixef(mod6_01)[2,1]))
+mod6_01_slopes$Est.Error[2:3] <- fixef(mod6_01)[5:6,2]
+mod6_01_slopes$Tissue <- c("Digestive gland","Gills","Gonads")
+mod7_01_plotdata <- conditional_effects(mod7_01)
+mod7_01_slopes <- as.data.frame(fixef(mod7_01))
+mod7_01_slopes <- mod7_01_slopes[2,]
+mod8_01_plotdata <- conditional_effects(mod8_01, "log_time:biomarker")
+mod8_01_slopes <- as.data.frame(rbind(fixef(mod8_01)[2,],fixef(mod8_01)[8:12,] + fixef(mod8_01)[2,1]))
+mod8_01_slopes$Est.Error[2:6] <- fixef(mod8_01)[8:12,2]
+mod8_01_slopes$Biomarker <- c("cat","gst","hsp70","hsp90","mt","sod")
+mod9_01_plotdata <- conditional_effects(mod9_01, "log_time:tissue")
+mod9_01_slopes <- as.data.frame(rbind(fixef(mod9_01)[2,],fixef(mod9_01)[5:6,] + fixef(mod9_01)[2,1]))
+mod9_01_slopes$Est.Error[2:3] <- fixef(mod9_01)[5:6,2]
+mod9_01_slopes$Tissue <- c("Digestive gland","Gills","Gonads")
+
+
+plot_mod1_01 <- ggplot(df, aes(x=LRR, y = 1)) +
+  theme_classic() +
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency, cex = 3, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1,xmin = `l-95% CI`, xmax = `u-95% CI`), data = mod1_01_plotdata) +
+  guides(size = "none", alpha = "none")
+#plot_mod1_01
+
+plot_mod2_01_cat <-  ggplot(subset(df, biomarker == "cat"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("cat") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "cat"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_01_plotdata[1,]))
+
+plot_mod2_01_gst <-  ggplot(subset(df, biomarker == "gst"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("gst") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "gst"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_01_plotdata[2,]))
+
+plot_mod2_01_hsp70 <-  ggplot(subset(df, biomarker == "hsp70"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("hsp70") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "hsp70"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_01_plotdata[3,]))
+
+plot_mod2_01_hsp90 <-  ggplot(subset(df, biomarker == "hsp90"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("hsp90") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "hsp90"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_01_plotdata[4,]))
+
+plot_mod2_01_mt <-  ggplot(subset(df, biomarker == "mt"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("mt") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "mt"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_01_plotdata[5,]))
+
+plot_mod2_01_sod <-  ggplot(subset(df, biomarker == "sod"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("sod") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "sod"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_01_plotdata[6,]))
+
+
+
+plot_mod2_01 <- ggarrange(plot_mod2_01_cat, plot_mod2_01_gst,plot_mod2_01_hsp70,plot_mod2_01_hsp90,plot_mod2_01_mt,plot_mod2_01_sod,
+                       labels = c("A", "B","C", "D", "E", "F"), 
+                       ncol = 3, nrow = 2)
+#plot_mod2_01
+
+plot_mod3_01_dg <-  ggplot(subset(df, tissue == "Digestive gland"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Digestive gland"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_01_plotdata[1,]))
+
+plot_mod3_01_gills <-  ggplot(subset(df, tissue == "Gills"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Gills"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_01_plotdata[2,])) #+
+
+plot_mod3_01_gonads <-  ggplot(subset(df, tissue == "Gonads"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Gonads"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_01_plotdata[3,]))
+
+
+plot_mod3_01 <- ggarrange(plot_mod3_01_dg, plot_mod3_01_gills,plot_mod3_01_gonads,
+                       labels = c("A", "B","C"), 
+                       ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom")
+#plot_mod3_01
+
+plot_mod4_01 <- ggplot(mod4_01_plotdata$log_tu, aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency)
+
+plot_mod4_01_slopes <- ggplot(mod4_01_slopes, aes(y= 1, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  theme(legend.position = "none")
+
+#plot_mod4_01
+#plot_mod4_01_slopes
+
+
+# CI cut off to min/max LRR in plot
+mod5_01_plotdata$`log_tu:biomarker`$lower__[mod5_01_plotdata$`log_tu:biomarker`$lower__ < min(df$LRR)] <- min(df$LRR)
+mod5_01_plotdata$`log_tu:biomarker`$lower__[mod5_01_plotdata$`log_tu:biomarker`$lower__ > max(df$LRR)] <- max(df$LRR)
+
+
+plot_mod5_01_cat <- ggplot(subset(mod5_01_plotdata$`log_tu:biomarker`, biomarker== "cat"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("cat") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR),colour = color_biomarkers[1]), data = subset(df, biomarker == "cat"), alpha = point_transparency)
+
+plot_mod5_01_gst <- ggplot(subset(mod5_01_plotdata$`log_tu:biomarker`, biomarker== "gst"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("gst") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[2]), data = subset(df, biomarker == "gst"), alpha = point_transparency)
+
+plot_mod5_01_hsp70 <- ggplot(subset(mod5_01_plotdata$`log_tu:biomarker`, biomarker== "hsp70"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp70") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[3]), data = subset(df, biomarker == "hsp70"), alpha = point_transparency)
+
+plot_mod5_01_hsp90 <- ggplot(subset(mod5_01_plotdata$`log_tu:biomarker`, biomarker== "hsp90"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp90") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[4]), data = subset(df, biomarker == "hsp90"), alpha = point_transparency)
+
+plot_mod5_01_mt <- ggplot(subset(mod5_01_plotdata$`log_tu:biomarker`, biomarker== "mt"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("mt") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[5]), data = subset(df, biomarker == "mt"), alpha = point_transparency)
+
+plot_mod5_01_sod <- ggplot(subset(mod5_01_plotdata$`log_tu:biomarker`, biomarker== "sod"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("sod") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[6]), data = subset(df, biomarker == "sod"), alpha = point_transparency)
+
+plot_mod5_01_slopes <- ggplot(mod5_01_slopes, aes(y= reorder(Biomarker, desc(Biomarker)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3, colour = Biomarker))+#, alpha = point_transparency) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod5_01_slopes$Estimate), y = c(6.15, 5.15, 4.15, 3.15, 2.15, 1.15), label = labels_biomarker, fontface = "italic") +
+  theme(legend.position = "none")
+
+plot_mod5_01 <- ggarrange(ggarrange(plot_mod5_01_cat, plot_mod5_01_gst,plot_mod5_01_hsp70,plot_mod5_01_hsp90,plot_mod5_01_mt,plot_mod5_01_sod,
+                       labels = c("A", "B","C", "D", "E", "F"), 
+                       ncol = 3, nrow = 2), plot_mod5_01_slopes, labels = c("","G"),ncol=2,nrow=1, widths = c(4,1))
+
+#plot_mod5_01
+
+plot_mod6_01_dg <- ggplot(subset(mod6_01_plotdata$'log_tu:tissue', tissue == "Digestive gland"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Digestive gland"), alpha = point_transparency)
+
+plot_mod6_01_gills <- ggplot(subset(mod6_01_plotdata$'log_tu:tissue', tissue == "Gills"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gills"), alpha = point_transparency)
+
+plot_mod6_01_gonads <- ggplot(subset(mod6_01_plotdata$'log_tu:tissue', tissue == "Gonads"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gonads"), alpha = point_transparency)
+
+plot_mod6_01_slopes <- ggplot(mod6_01_slopes, aes(y= reorder(Tissue, desc(Tissue)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), alpha = point_transparency) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod6_01_slopes$Estimate), y = c(3.15, 2.15, 1.15), label = labels_tissue) +
+  theme(legend.position = "none")
+
+plot_mod6_01 <- ggarrange(ggarrange(plot_mod6_01_dg, plot_mod6_01_gills,plot_mod6_01_gonads,
+                       labels = c("A", "B","C"), 
+                       ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom"), 
+                       plot_mod6_01_slopes,labels = c("","D"), ncol=2, nrow=1, widths =c(4,1))
+
+#plot_mod6_01
+
+plot_mod7_01 <- ggplot(mod7_01_plotdata$log_time, aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-1,0,1,2,3,4,5,6,7,8,9,10)) +
+  theme(legend.position = "none")+
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency)
+
+plot_mod7_01_slopes <- ggplot(mod7_01_slopes, aes(y= 1, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog(Exposure time))", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  theme(legend.position = "none")
+
+#plot_mod7_01
+
+
+# CI cut off to min/max LRR for plots
+mod8_01_plotdata$`log_time:biomarker`$lower__[mod8_01_plotdata$`log_time:biomarker`$lower__ < min(df$LRR)] <- min(df$LRR)
+mod8_01_plotdata$`log_time:biomarker`$lower__[mod8_01_plotdata$`log_time:biomarker`$lower__ > max(df$LRR)] <- max(df$LRR)
+
+
+
+plot_mod8_01_cat <- ggplot(subset(mod8_01_plotdata$`log_time:biomarker`, biomarker== "cat"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("cat") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR),colour = color_biomarkers[1]), data = subset(df, biomarker == "cat"), alpha = point_transparency)
+
+plot_mod8_01_gst <- ggplot(subset(mod8_01_plotdata$`log_time:biomarker`, biomarker== "gst"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("gst") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[2]), data = subset(df, biomarker == "gst"), alpha = point_transparency)
+
+plot_mod8_01_hsp70 <- ggplot(subset(mod8_01_plotdata$`log_time:biomarker`, biomarker== "hsp70"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp70") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[3]), data = subset(df, biomarker == "hsp70"), alpha = point_transparency)
+
+plot_mod8_01_hsp90 <- ggplot(subset(mod8_01_plotdata$`log_time:biomarker`, biomarker== "hsp90"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp90") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[4]), data = subset(df, biomarker == "hsp90"), alpha = point_transparency)
+
+plot_mod8_01_mt <- ggplot(subset(mod8_01_plotdata$`log_time:biomarker`, biomarker== "mt"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("mt") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[5]), data = subset(df, biomarker == "mt"), alpha = point_transparency)
+
+plot_mod8_01_sod <- ggplot(subset(mod8_01_plotdata$`log_time:biomarker`, biomarker== "sod"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("sod") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[6]), data = subset(df, biomarker == "sod"), alpha = point_transparency)
+
+plot_mod8_01_slopes <- ggplot(mod8_01_slopes, aes(y= reorder(Biomarker, desc(Biomarker)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3, colour = Biomarker))+#, alpha = point_transparency) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog Exposure time)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod8_01_slopes$Estimate), y = c(6.15, 5.15, 4.15, 3.15, 2.15, 1.15), label = labels_biomarker, fontface = "italic") +
+  theme(legend.position = "none")
+
+plot_mod8_01 <- ggarrange(ggarrange(plot_mod8_01_cat, plot_mod8_01_gst,plot_mod8_01_hsp70,plot_mod8_01_hsp90,plot_mod8_01_mt,plot_mod8_01_sod,
+                                 labels = c("A", "B","C", "D", "E", "F"), 
+                                 ncol = 3, nrow = 2), plot_mod8_01_slopes, labels = c("","G"),ncol=2,nrow=1, widths = c(4,1))
+
+#plot_mod8_01
+
+plot_mod9_01_dg <- ggplot(subset(mod9_01_plotdata$'log_time:tissue', tissue == "Digestive gland"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Digestive gland"), alpha = point_transparency)
+
+plot_mod9_01_gills <- ggplot(subset(mod9_01_plotdata$'log_time:tissue', tissue == "Gills"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gills"), alpha = point_transparency)
+
+plot_mod9_01_gonads <- ggplot(subset(mod9_01_plotdata$'log_time:tissue', tissue == "Gonads"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gonads"), alpha = point_transparency)
+
+plot_mod9_01_slopes <- ggplot(mod9_01_slopes, aes(y= reorder(Tissue, desc(Tissue)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), alpha = point_transparency) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog Exposure time)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod9_01_slopes$Estimate), y = c(3.15, 2.15, 1.15), label = labels_tissue) +
+  theme(legend.position = "none")
+
+plot_mod9_01 <- ggarrange(ggarrange(plot_mod9_01_dg, plot_mod9_01_gills,plot_mod9_01_gonads,
+                                 labels = c("A", "B","C"), 
+                                 ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom"), 
+                       plot_mod9_01_slopes,labels = c("","D"), ncol=2, nrow=1, widths =c(4,1))
+
+#plot_mod9_01
+```
+
+Sensitivity analysis - non-independence. Covariance based on correlation factor of 0.9.
+```{r}
+mod1_09 <- readRDS("mod1_09.rds")
+mod2_09 <- readRDS("mod2_09.rds")
+mod3_09 <- readRDS("mod3_09.rds")
+mod4_09 <- readRDS("mod4_09.rds")
+mod5_09 <- readRDS("mod5_09.rds")
+mod6_09 <- readRDS("mod6_09.rds")
+mod7_09 <- readRDS("mod7_09.rds")
+mod8_09 <- readRDS("mod8_09.rds")
+mod9_09 <- readRDS("mod9_09.rds")
+mod1_09_plotdata <- summary(mod1_09)$fixed
+mod1_09_plotdata <- as.data.frame(mod1_09_plotdata)
+mod2_09_plotdata <- summary(mod2_09)$fixed
+mod2_09_plotdata <- as.data.frame(mod2_09_plotdata)
+mod3_09_plotdata <- summary(mod3_09)$fixed
+mod3_09_plotdata <- as.data.frame(mod3_09_plotdata)
+mod4_09_plotdata <- conditional_effects(mod4_09)
+mod4_09_slopes <- as.data.frame(fixef(mod4_09))
+mod4_09_slopes <- mod4_09_slopes[2,]
+mod5_09_plotdata <- conditional_effects(mod5_09, "log_tu:biomarker")
+mod5_09_slopes <- as.data.frame(rbind(fixef(mod5_09)[2,],fixef(mod5_09)[8:12,] + fixef(mod5_09)[2,1]))
+mod5_09_slopes$Est.Error[2:6] <- fixef(mod5_09)[8:12,2]
+mod5_09_slopes$Biomarker <- c("cat","gst","hsp70","hsp90","mt","sod")
+mod6_09_plotdata <- conditional_effects(mod6_09, "log_tu:tissue")
+mod6_09_slopes <- as.data.frame(rbind(fixef(mod6_09)[2,],fixef(mod6_09)[5:6,] + fixef(mod6_09)[2,1]))
+mod6_09_slopes$Est.Error[2:3] <- fixef(mod6_09)[5:6,2]
+mod6_09_slopes$Tissue <- c("Digestive gland","Gills","Gonads")
+mod7_09_plotdata <- conditional_effects(mod7_09)
+mod7_09_slopes <- as.data.frame(fixef(mod7_09))
+mod7_09_slopes <- mod7_09_slopes[2,]
+mod8_09_plotdata <- conditional_effects(mod8_09, "log_time:biomarker")
+mod8_09_slopes <- as.data.frame(rbind(fixef(mod8_09)[2,],fixef(mod8_09)[8:12,] + fixef(mod8_09)[2,1]))
+mod8_09_slopes$Est.Error[2:6] <- fixef(mod8_09)[8:12,2]
+mod8_09_slopes$Biomarker <- c("cat","gst","hsp70","hsp90","mt","sod")
+mod9_09_plotdata <- conditional_effects(mod9_09, "log_time:tissue")
+mod9_09_slopes <- as.data.frame(rbind(fixef(mod9_09)[2,],fixef(mod9_09)[5:6,] + fixef(mod9_09)[2,1]))
+mod9_09_slopes$Est.Error[2:3] <- fixef(mod9_09)[5:6,2]
+mod9_09_slopes$Tissue <- c("Digestive gland","Gills","Gonads")
+
+
+plot_mod1_09 <- ggplot(df, aes(x=LRR, y = 1)) +
+  theme_classic() +
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency, cex = 3, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1,xmin = `l-95% CI`, xmax = `u-95% CI`), data = mod1_09_plotdata) +
+  guides(size = "none", alpha = "none")
+#plot_mod1_09
+
+plot_mod2_09_cat <-  ggplot(subset(df, biomarker == "cat"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("cat") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "cat"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_09_plotdata[1,]))
+
+plot_mod2_09_gst <-  ggplot(subset(df, biomarker == "gst"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("gst") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "gst"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_09_plotdata[2,]))
+
+plot_mod2_09_hsp70 <-  ggplot(subset(df, biomarker == "hsp70"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("hsp70") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "hsp70"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_09_plotdata[3,]))
+
+plot_mod2_09_hsp90 <-  ggplot(subset(df, biomarker == "hsp90"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("hsp90") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "hsp90"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_09_plotdata[4,])) #+
+
+plot_mod2_09_mt <-  ggplot(subset(df, biomarker == "mt"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("mt") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "mt"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_09_plotdata[5,]))
+
+plot_mod2_09_sod <-  ggplot(subset(df, biomarker == "sod"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  ggtitle("sod") +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, biomarker == "sod"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  theme(legend.position = "none")+
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod2_09_plotdata[6,])) #+
+
+
+
+plot_mod2_09 <- ggarrange(plot_mod2_09_cat, plot_mod2_09_gst,plot_mod2_09_hsp70,plot_mod2_09_hsp90,plot_mod2_09_mt,plot_mod2_09_sod,
+                       labels = c("A", "B","C", "D", "E", "F"), 
+                       ncol = 3, nrow = 2)
+#plot_mod2_09
+
+plot_mod3_09_dg <-  ggplot(subset(df, tissue == "Digestive gland"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Digestive gland"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_09_plotdata[1,]))
+
+plot_mod3_09_gills <-  ggplot(subset(df, tissue == "Gills"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Gills"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_09_plotdata[2,])) #+
+
+plot_mod3_09_gonads <-  ggplot(subset(df, tissue == "Gonads"), aes(x=LRR, y=1)) +
+  theme_classic() + 
+  geom_beeswarm(aes(size = (1/sLRR), colour = biomarker), data = subset(df, tissue == "Gonads"), alpha = point_transparency, cex = 6, groupOnX = FALSE) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  geom_vline(xintercept = 0, linetype = "longdash") +
+  scale_x_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-3,-2,-1,0,1,2,3,4,5,6,7)) + 
+  scale_y_continuous(name = "", breaks = c()) +
+  guides(size = "none", alpha = "none") +
+  geom_pointinterval(aes(size = 5, x=Estimate, y=1, xmin = `l-95% CI`, xmax = `u-95% CI`), data = subset(mod3_09_plotdata[3,]))
+
+
+plot_mod3_09 <- ggarrange(plot_mod3_09_dg, plot_mod3_09_gills,plot_mod3_09_gonads,
+                       labels = c("A", "B","C"), 
+                       ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom")
+#plot_mod3_09
+
+plot_mod4_09 <- ggplot(mod4_09_plotdata$log_tu, aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency)
+
+plot_mod4_09_slopes <- ggplot(mod4_09_slopes, aes(y= 1, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  theme(legend.position = "none")
+
+#plot_mod4_09
+#plot_mod4_09_slopes
+
+
+# CI cut off to min/max LRR in plot
+mod5_09_plotdata$`log_tu:biomarker`$lower__[mod5_09_plotdata$`log_tu:biomarker`$lower__ < min(df$LRR)] <- min(df$LRR)
+mod5_09_plotdata$`log_tu:biomarker`$lower__[mod5_09_plotdata$`log_tu:biomarker`$lower__ > max(df$LRR)] <- max(df$LRR)
+
+
+plot_mod5_09_cat <- ggplot(subset(mod5_09_plotdata$`log_tu:biomarker`, biomarker== "cat"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("cat") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR),colour = color_biomarkers[1]), data = subset(df, biomarker == "cat"), alpha = point_transparency)
+
+plot_mod5_09_gst <- ggplot(subset(mod5_09_plotdata$`log_tu:biomarker`, biomarker== "gst"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("gst") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[2]), data = subset(df, biomarker == "gst"), alpha = point_transparency)
+
+plot_mod5_09_hsp70 <- ggplot(subset(mod5_09_plotdata$`log_tu:biomarker`, biomarker== "hsp70"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp70") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[3]), data = subset(df, biomarker == "hsp70"), alpha = point_transparency)
+
+plot_mod5_09_hsp90 <- ggplot(subset(mod5_09_plotdata$`log_tu:biomarker`, biomarker== "hsp90"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp90") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[4]), data = subset(df, biomarker == "hsp90"), alpha = point_transparency)
+
+plot_mod5_09_mt <- ggplot(subset(mod5_09_plotdata$`log_tu:biomarker`, biomarker== "mt"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("mt") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[5]), data = subset(df, biomarker == "mt"), alpha = point_transparency)
+
+plot_mod5_09_sod <- ggplot(subset(mod5_09_plotdata$`log_tu:biomarker`, biomarker== "sod"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  ggtitle("sod") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = color_biomarkers[6]), data = subset(df, biomarker == "sod"), alpha = point_transparency)
+
+plot_mod5_09_slopes <- ggplot(mod5_09_slopes, aes(y= reorder(Biomarker, desc(Biomarker)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3, colour = Biomarker))+#, alpha = point_transparency) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod5_09_slopes$Estimate), y = c(6.15, 5.15, 4.15, 3.15, 2.15, 1.15), label = labels_biomarker, fontface = "italic") +
+  theme(legend.position = "none")
+
+plot_mod5_09 <- ggarrange(ggarrange(plot_mod5_09_cat, plot_mod5_09_gst,plot_mod5_09_hsp70,plot_mod5_09_hsp90,plot_mod5_09_mt,plot_mod5_09_sod,
+                       labels = c("A", "B","C", "D", "E", "F"), 
+                       ncol = 3, nrow = 2), plot_mod5_09_slopes, labels = c("","G"),ncol=2,nrow=1, widths = c(4,1))
+
+#plot_mod5_09
+
+plot_mod6_09_dg <- ggplot(subset(mod6_09_plotdata$'log_tu:tissue', tissue == "Digestive gland"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Digestive gland"), alpha = point_transparency)
+
+plot_mod6_09_gills <- ggplot(subset(mod6_09_plotdata$'log_tu:tissue', tissue == "Gills"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gills"), alpha = point_transparency)
+
+plot_mod6_09_gonads <- ggplot(subset(mod6_09_plotdata$'log_tu:tissue', tissue == "Gonads"), aes(x=log_tu, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_tu, limits = c(min(na.omit(df$log_tu)), max(na.omit(df$log_tu))), breaks = c(-3,-2,-1,0,1,2,3),
+                     labels = c("0.001","0.01","0.1","1","10","100","1000")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_tu, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gonads"), alpha = point_transparency)
+
+plot_mod6_09_slopes <- ggplot(mod6_09_slopes, aes(y= reorder(Tissue, desc(Tissue)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), alpha = point_transparency) +
+  scale_x_continuous(name = "Slope (dlnRR/dlogTU)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod6_09_slopes$Estimate), y = c(3.15, 2.15, 1.15), label = labels_tissue) +
+  theme(legend.position = "none")
+
+plot_mod6_09 <- ggarrange(ggarrange(plot_mod6_09_dg, plot_mod6_09_gills,plot_mod6_09_gonads,
+                       labels = c("A", "B","C"), 
+                       ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom"), 
+                       plot_mod6_09_slopes,labels = c("","D"), ncol=2, nrow=1, widths =c(4,1))
+
+#plot_mod6_09
+
+plot_mod7_09 <- ggplot(mod7_09_plotdata$log_time, aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-1,0,1,2,3,4,5,6,7,8,9,10)) +
+  theme(legend.position = "none")+
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), data = df, alpha = point_transparency)
+
+plot_mod7_09_slopes <- ggplot(mod7_09_slopes, aes(y= 1, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3)) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog(Exposure time))", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  theme(legend.position = "none")
+
+#plot_mod7_09
+
+
+# CI cut off to min/max LRR for plots
+mod8_09_plotdata$`log_time:biomarker`$lower__[mod8_09_plotdata$`log_time:biomarker`$lower__ < min(df$LRR)] <- min(df$LRR)
+mod8_09_plotdata$`log_time:biomarker`$lower__[mod8_09_plotdata$`log_time:biomarker`$lower__ > max(df$LRR)] <- max(df$LRR)
+
+
+
+plot_mod8_09_cat <- ggplot(subset(mod8_09_plotdata$`log_time:biomarker`, biomarker== "cat"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("cat") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[1]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR),colour = color_biomarkers[1]), data = subset(df, biomarker == "cat"), alpha = point_transparency)
+
+plot_mod8_09_gst <- ggplot(subset(mod8_09_plotdata$`log_time:biomarker`, biomarker== "gst"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("gst") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[2]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[2]), data = subset(df, biomarker == "gst"), alpha = point_transparency)
+
+plot_mod8_09_hsp70 <- ggplot(subset(mod8_09_plotdata$`log_time:biomarker`, biomarker== "hsp70"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp70") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[3]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[3]), data = subset(df, biomarker == "hsp70"), alpha = point_transparency)
+
+plot_mod8_09_hsp90 <- ggplot(subset(mod8_09_plotdata$`log_time:biomarker`, biomarker== "hsp90"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("hsp90") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[4]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[4]), data = subset(df, biomarker == "hsp90"), alpha = point_transparency)
+
+plot_mod8_09_mt <- ggplot(subset(mod8_09_plotdata$`log_time:biomarker`, biomarker== "mt"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("mt") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[5]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[5]), data = subset(df, biomarker == "mt"), alpha = point_transparency)
+
+plot_mod8_09_sod <- ggplot(subset(mod8_09_plotdata$`log_time:biomarker`, biomarker== "sod"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  ggtitle("sod") +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "italic", colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers[6]) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  theme(legend.position = "none")+
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = color_biomarkers[6]), data = subset(df, biomarker == "sod"), alpha = point_transparency)
+
+plot_mod8_09_slopes <- ggplot(mod8_09_slopes, aes(y= reorder(Biomarker, desc(Biomarker)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3, colour = Biomarker))+#, alpha = point_transparency) +
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog Exposure time)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod8_09_slopes$Estimate), y = c(6.15, 5.15, 4.15, 3.15, 2.15, 1.15), label = labels_biomarker, fontface = "italic") +
+  theme(legend.position = "none")
+
+plot_mod8_09 <- ggarrange(ggarrange(plot_mod8_09_cat, plot_mod8_09_gst,plot_mod8_09_hsp70,plot_mod8_09_hsp90,plot_mod8_09_mt,plot_mod8_09_sod,
+                                 labels = c("A", "B","C", "D", "E", "F"), 
+                                 ncol = 3, nrow = 2), plot_mod8_09_slopes, labels = c("","G"),ncol=2,nrow=1, widths = c(4,1))
+
+#plot_mod8_09
+
+plot_mod9_09_dg <- ggplot(subset(mod9_09_plotdata$'log_time:tissue', tissue == "Digestive gland"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Digestive gland"), alpha = point_transparency)
+
+plot_mod9_09_gills <- ggplot(subset(mod9_09_plotdata$'log_time:tissue', tissue == "Gills"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gills"), alpha = point_transparency)
+
+plot_mod9_09_gonads <- ggplot(subset(mod9_09_plotdata$'log_time:tissue', tissue == "Gonads"), aes(x=log_time, y=estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower__, ymax = upper__, linetype=NA), alpha=ci_transparency) +
+  theme_classic() + 
+  theme(plot.title = element_text(colour = "black", size = 14, hjust = 0.5)) + 
+  scale_color_manual(name = "Biomarker", labels = labels_biomarker, values = color_biomarkers) +
+  scale_x_continuous(name = labels_time, limits = c(min(na.omit(df$log_time)), max(na.omit(df$log_time))),
+                     breaks = c(log(1.5,2),log(6,2),log(24,2),log(96,2),log(384,2)),
+                     labels = c("1.5 h","6 h","1 d","4 d","16 d")) + 
+  scale_y_continuous(name = labels_lrr, limits = c(min(df$LRR), max(df$LRR)), breaks = c(-4,-3,-2,-1,0,1,2,3,4,5,6,7)) +
+  guides(size = "none", alpha = "none") +
+  geom_hline(yintercept = 0, linetype = "longdash") +
+  geom_point(aes(x = log_time, y = LRR, size = (1/sLRR), colour = biomarker), subset(df, tissue == "Gonads"), alpha = point_transparency)
+
+plot_mod9_09_slopes <- ggplot(mod9_09_slopes, aes(y= reorder(Tissue, desc(Tissue)), x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), alpha = point_transparency) +
+  scale_x_continuous(name = "Slope (dlnRR/dlog Exposure time)", limits = c(-1.5, 1.5),
+                     breaks = c(-1,-0.5,0,0.5,1)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = (mod9_09_slopes$Estimate), y = c(3.15, 2.15, 1.15), label = labels_tissue) +
+  theme(legend.position = "none")
+
+plot_mod9_09 <- ggarrange(ggarrange(plot_mod9_09_dg, plot_mod9_09_gills,plot_mod9_09_gonads,
+                                 labels = c("A", "B","C"), 
+                                 ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom"), 
+                       plot_mod9_09_slopes,labels = c("","D"), ncol=2, nrow=1, widths =c(4,1))
+
+#plot_mod9_09
+```
+
+Sensitivity analysis - comparison between variance-covariance matrices
+```{r}
+sensitivity_intercept <- rbind(mod1_09_plotdata,mod1_plotdata,mod1_01_plotdata,
+                               mod2_09_plotdata,mod2_plotdata,mod2_01_plotdata,
+                               mod3_09_plotdata,mod3_plotdata,mod3_01_plotdata)
+sensitivity_intercept <- sensitivity_intercept[,1:4]
+colnames(sensitivity_intercept) <- c("Estimate", "Est.Error","Q2.5","Q97.5")
+sensitivity_intercept$no <- c(12.5,12.25,12.0,
+                              10,9,8,7,6,5,9.75,8.75,7.75,6.75,5.75,4.75,9.5,8.5,7.5,6.5,5.5,4.5,
+                              2.5,1.5,0.5,2.25,1.25,0.25,2.0,1.0,0.0)
+sensitivity_intercept$color <- c("grey","black","grey",
+                                 "grey","grey","grey","grey","grey","grey",color_biomarkers,"grey","grey","grey","grey","grey","grey",
+                                 "grey","grey","grey","black","black","black","grey","grey","grey")
+sensitivity_intercept$category <- c("Overall effect","Overall effect","Overall effect",
+                                    "cat", "gst", "hsp70", "hsp90", "mt", "sod","cat", "gst", "hsp70",
+                                    "hsp90", "mt", "sod", "cat", "gst", "hsp70", "hsp90", "mt", "sod",
+                                    "Digestive gland", "Gills", "Gonads","Digestive gland", "Gills", "Gonads","Digestive gland", "Gills", "Gonads")
+sensitivity_intercept$fontface <- c("bold","bold","bold",
+                                    "italic","italic","italic","italic","italic","italic","italic","italic","italic",
+                                    "italic","italic","italic","italic","italic","italic","italic","italic","italic",
+                                    "plain","plain","plain","plain","plain","plain","plain","plain","plain")
+
+
+plot_sensitivity_intercepts <- ggplot(sensitivity_intercept, aes(y= no, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  ggtitle("Overall effect") +
+  theme(plot.title = element_text(face = "bold", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), colour = sensitivity_intercept$color) +
+  scale_x_continuous(name = labels_lrr, limits = c(-max(sensitivity_intercept$Q97.5),max(sensitivity_intercept$Q97.5)),
+                     breaks = c(-2,-1.5,-1,-0.5,0,0.5,1,1.5,2)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = sensitivity_intercept$Estimate[1], y = sensitivity_intercept$no[1]+0.3, label = sensitivity_intercept$category[1], fontface = sensitivity_intercept$fontface[1]) +
+  annotate("text", x = sensitivity_intercept$Estimate[4:9], y = sensitivity_intercept$no[4:9]+0.3, label = sensitivity_intercept$category[4:9], fontface = sensitivity_intercept$fontface[4:9]) +
+  annotate("text", x = sensitivity_intercept$Estimate[22:24], y = sensitivity_intercept$no[22:24]+0.3, label = sensitivity_intercept$category[22:24], fontface = sensitivity_intercept$fontface[22:24]) +
+  annotate("text", x = c(median(sensitivity_intercept[4:21,1]), median(sensitivity_intercept[22:30,1])), y = c(sensitivity_intercept[4,5]+0.75, sensitivity_intercept[22,5]+0.75),
+           label = c("Transcripts", "Tissues"), fontface = "bold")
+
+
+sensitivity_tu_slopes <- rbind(mod4_09_slopes,mod4_slopes,mod4_01_slopes,
+                               mod5_09_slopes[,1:4],mod5_slopes[,1:4],mod5_01_slopes[,1:4],
+                               mod6_09_slopes[,1:4],mod6_slopes[,1:4],mod6_01_slopes[,1:4])
+sensitivity_tu_slopes$no <- c(12.5,12.25,12.0,
+                              10,9,8,7,6,5,9.75,8.75,7.75,6.75,5.75,4.75,9.5,8.5,7.5,6.5,5.5,4.5,
+                              2.5,1.5,0.5,2.25,1.25,0.25,2.0,1.0,0.0)
+sensitivity_tu_slopes$color <- c("grey","black","grey",
+                                 "grey","grey","grey","grey","grey","grey",color_biomarkers,"grey","grey","grey","grey","grey","grey",
+                                 "grey","grey","grey","black","black","black","grey","grey","grey")
+sensitivity_tu_slopes$category <- c("Overall effect","Overall effect","Overall effect",
+                                    "cat", "gst", "hsp70", "hsp90", "mt", "sod","cat", "gst", "hsp70",
+                                    "hsp90", "mt", "sod", "cat", "gst", "hsp70", "hsp90", "mt", "sod",
+                                    "Digestive gland", "Gills", "Gonads","Digestive gland", "Gills", "Gonads","Digestive gland", "Gills", "Gonads")
+sensitivity_tu_slopes$fontface <- c("bold","bold","bold",
+                                    "italic","italic","italic","italic","italic","italic","italic","italic","italic",
+                                    "italic","italic","italic","italic","italic","italic","italic","italic","italic",
+                                    "plain","plain","plain","plain","plain","plain","plain","plain","plain")
+
+plot_sensitivity_tu_slopes <- ggplot(sensitivity_tu_slopes, aes(y= no, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  ggtitle("Concentration-dependence") +
+  theme(plot.title = element_text(face = "bold", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), colour = sensitivity_tu_slopes$color) +
+  scale_x_continuous(name = "Slope", limits = c(min(sensitivity_tu_slopes$Q2.5),-min(sensitivity_tu_slopes$Q2.5)),
+                     breaks = c(-2,-1.5,-1,-0.5,0,0.5,1,1.5,2)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = sensitivity_tu_slopes$Estimate[1], y = sensitivity_tu_slopes$no[1]+0.3, label = sensitivity_tu_slopes$category[1], fontface = sensitivity_tu_slopes$fontface[1]) +
+  annotate("text", x = sensitivity_tu_slopes$Estimate[4:9], y = sensitivity_tu_slopes$no[4:9]+0.3, label = sensitivity_tu_slopes$category[4:9], fontface = sensitivity_tu_slopes$fontface[4:9]) +
+  annotate("text", x = sensitivity_tu_slopes$Estimate[22:24], y = sensitivity_tu_slopes$no[22:24]+0.3, label = sensitivity_tu_slopes$category[22:24], fontface = sensitivity_tu_slopes$fontface[22:24]) +
+  annotate("text", x = c(median(sensitivity_tu_slopes[4:21,1]), median(sensitivity_tu_slopes[22:30,1])), y = c(sensitivity_tu_slopes[4,5]+0.75, sensitivity_tu_slopes[22,5]+0.75),
+           label = c("Transcripts", "Tissues"), fontface = "bold")
+
+sensitivity_time_slopes <- rbind(mod7_09_slopes,mod7_slopes,mod7_01_slopes,
+                               mod8_09_slopes[,1:4],mod8_slopes[,1:4],mod8_01_slopes[,1:4],
+                               mod9_09_slopes[,1:4],mod9_slopes[,1:4],mod9_01_slopes[,1:4])
+sensitivity_time_slopes$no <- c(12.5,12.25,12.0,
+                              10,9,8,7,6,5,9.75,8.75,7.75,6.75,5.75,4.75,9.5,8.5,7.5,6.5,5.5,4.5,
+                              2.5,1.5,0.5,2.25,1.25,0.25,2.0,1.0,0.0)
+sensitivity_time_slopes$color <- c("grey","black","grey",
+                                 "grey","grey","grey","grey","grey","grey",color_biomarkers,"grey","grey","grey","grey","grey","grey",
+                                 "grey","grey","grey","black","black","black","grey","grey","grey")
+sensitivity_time_slopes$category <- c("Overall effect","Overall effect","Overall effect",
+                                    "cat", "gst", "hsp70", "hsp90", "mt", "sod","cat", "gst", "hsp70",
+                                    "hsp90", "mt", "sod", "cat", "gst", "hsp70", "hsp90", "mt", "sod",
+                                    "Digestive gland", "Gills", "Gonads","Digestive gland", "Gills", "Gonads","Digestive gland", "Gills", "Gonads")
+sensitivity_time_slopes$fontface <- c("bold","bold","bold",
+                                    "italic","italic","italic","italic","italic","italic","italic","italic","italic",
+                                    "italic","italic","italic","italic","italic","italic","italic","italic","italic",
+                                    "plain","plain","plain","plain","plain","plain","plain","plain","plain")
+
+plot_sensitivity_time_slopes <- ggplot(sensitivity_time_slopes, aes(y= no, x = Estimate, xmin = Q2.5, xmax = Q97.5)) +
+  theme_classic() + 
+  ggtitle("Time-dependence") +
+  theme(plot.title = element_text(face = "bold", colour = "black", size = 14, hjust = 0.5)) + 
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_pointinterval(aes(size = 3), colour = sensitivity_time_slopes$color) +
+  scale_x_continuous(name = "Slope", limits = c(-max(sensitivity_time_slopes$Q97.5),max(sensitivity_time_slopes$Q97.5)),
+                     breaks = c(-2,-1.75,-1.5,-1.25,-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1,1.25,1.5,1.75,2)) +
+  scale_y_discrete(name = "", breaks = "none") +
+  annotate("text", x = sensitivity_time_slopes$Estimate[1], y = sensitivity_time_slopes$no[1]+0.3, label = sensitivity_time_slopes$category[1], fontface = sensitivity_time_slopes$fontface[1]) +
+  annotate("text", x = sensitivity_time_slopes$Estimate[4:9], y = sensitivity_time_slopes$no[4:9]+0.3, label = sensitivity_time_slopes$category[4:9], fontface = sensitivity_time_slopes$fontface[4:9]) +
+  annotate("text", x = sensitivity_time_slopes$Estimate[22:24], y = sensitivity_time_slopes$no[22:24]+0.3, label = sensitivity_time_slopes$category[22:24], fontface = sensitivity_time_slopes$fontface[22:24]) +
+  annotate("text", x = c(median(sensitivity_time_slopes[4:21,1]), median(sensitivity_time_slopes[22:30,1])), y = c(sensitivity_time_slopes[4,5]+0.75, sensitivity_time_slopes[22,5]+0.75),
+           label = c("Transcripts", "Tissues"), fontface = "bold")
+
+plot_sensitivity <- ggarrange(plot_sensitivity_intercepts, plot_sensitivity_tu_slopes, plot_sensitivity_time_slopes,
+          labels = c("A","B","C"),
+          ncol = 3, nrow = 1)
+plot_sensitivity
+```
+

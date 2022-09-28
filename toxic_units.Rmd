@@ -1,0 +1,253 @@
+---
+title: "toxic_units"
+author: "Gustaf M.O. Ekelund Ugge"
+date: '2022-09-06'
+output: pdf_document
+---
+
+```{r}
+library("ggplot2")
+library("ggpubr")
+library("standartox")
+library("openxlsx")
+```
+
+
+# Toxicity data (72-96 h, bivalves)
+```{r}
+
+##Ag (Ag, AgCl, Ag2SO4, AgNO3)
+ag_tox <- stx_query(cas =c('7440-22-4', '7783-90-6', '10294-26-5', '7761-88-8'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+##As/As(III) (As, NaAsO2, KAsO2, As2O3)
+as_iii_tox <- stx_query(cas =c('7440-38-2', '7784-46-5', '10124-50-2 ', '1327-53-3'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+##As/As(V) (As, Na3AsO4, Na3AsO4 * 12H2O, As2O5)
+as_v_tox <- stx_query(cas =c('7440-38-2', '13464-38-5', '13510-46-8', '1303-28-2'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+##Cd (Cd, CdCl2, CdSO4, Cd(NO3)2)
+cd_tox <- stx_query(cas =c('7440-43-9','10108-64-2', '10124-36-4', '10325-94-7'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+##Cr/Cr(VI) (Cr, Cr(VI), Na2Cr2O7, Na2Cr2O7 * 2H2O, K2Cr2O7, Na2CrO4, K2CrO4, CrO3)
+
+cr_tox <- stx_query(cas = c('7440-47-3', '10588-01-9', '7789-12-0', '7778-50-9', '7775-11-3', '7789-00-6', '1333-82-0'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia', duration = c(72,96))
+
+## Cu (Cu, CuCl2, CuSO4, Cu(NO3)2)
+cu_tox <- stx_query(cas =c('7440-50-8', '7447-39-4', '7758-98-7', '3251-23-8'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+## Gd (Gd, GdCl3, GdCl3*6H2O, Gd2(SO4)3, Gd(NO3)3)
+
+gd_tox <- stx_query(cas = c('7440-54-2', '10138-52-0', '19423-81-5', '155788-75-3', '10168-81-7'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia', duration = c(72,96))
+
+## Hg (Hg, HgCl2, HgSO4, Hg(NO3)2)
+hg_tox <- stx_query(cas =c('7439-97-6', '7487-94-7', '7783-35-9', '10045-94-0'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+##Ni (Ni, NiCl2, NiSO4, Ni(NO3)2)
+ni_tox <- stx_query(cas =c('7440-02-0','7718-54-9', '7786-81-4', '13138-45-9'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+##Pb (Pb, PbCl2, PbSO4, Pb(NO3)2)
+pb_tox <- stx_query(cas =c('7439-92-1', '7758-95-4', '7446-14-2', '10099-74-8'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+##Sm (Sm, SmCl3, Sm2(SO4)3, Sm(NO3)2, Sm(NO3)3*6H2O)
+sm_tox <- stx_query(cas =c('7440-19-9', '10361-82-7', '13465-58-2', '10361-83-8', '13759-83-6'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia')
+
+##Y (Y, YCl3, Y2(SO4)3, Y(NO3)3)
+y_tox <- stx_query(cas =c('7440-65-5', '10361-92-9', '13510-71-9', '10361-93-0'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia')
+
+##Zn (Zn, ZnCl2, ZnSO4, Zn(NO3)2)
+zn_tox <- stx_query(cas =c('7440-66-6', '7646-85-7', '7733-02-0', '7779-88-6'), endpoint = 'XX50', effect = 'mortality', exposure = 'aquatic', taxa = 'Bivalvia',
+          duration = c(72,96))
+
+```
+
+
+# Removal of species duplicates (selecting lowest effect concentration for each species)
+```{r}
+ag_tox <- ag_tox$filtered_all
+ag_tox <- ag_tox[order(ag_tox$concentration),]
+ag_tox <- ag_tox[!duplicated(ag_tox$species_number)]
+ag_tox$metal <- "Ag"
+
+as_iii_tox <- as_iii_tox$filtered_all
+as_iii_tox <- as_iii_tox[order(as_iii_tox$concentration),]
+as_iii_tox <- as_iii_tox[!duplicated(as_iii_tox$species_number)]
+as_iii_tox$metal <- "As(III)"
+
+as_v_tox <- as_v_tox$filtered_all
+as_v_tox <- as_v_tox[order(as_v_tox$concentration),]
+as_v_tox <- as_v_tox[!duplicated(as_v_tox$species_number)]
+as_v_tox$metal <- "As(V)"
+
+cd_tox <- cd_tox$filtered_all
+cd_tox <- cd_tox[order(cd_tox$concentration),]
+cd_tox <- cd_tox[!duplicated(cd_tox$species_number)]
+cd_tox$metal <- "Cd"
+
+cr_tox <- cr_tox$filtered_all
+cr_tox <- cr_tox[order(cr_tox$concentration),]
+cr_tox <- cr_tox[!duplicated(cr_tox$species_number)]
+cr_tox$metal <- "Cr(VI)"
+
+cu_tox <- cu_tox$filtered_all
+cu_tox <- cu_tox[order(cu_tox$concentration),]
+cu_tox <- cu_tox[!duplicated(cu_tox$species_number)]
+cu_tox$metal <- "Cu"
+
+gd_tox <- gd_tox$filtered_all
+gd_tox <- gd_tox[order(gd_tox$concentration),]
+gd_tox <- gd_tox[!duplicated(gd_tox$species_number)]
+gd_tox$metal <- "Gd"
+
+hg_tox <- hg_tox$filtered_all
+hg_tox <- hg_tox[order(hg_tox$concentration),]
+hg_tox <- hg_tox[!duplicated(hg_tox$species_number)]
+hg_tox$metal <- "Hg"
+
+ni_tox <- ni_tox$filtered_all
+ni_tox <- ni_tox[order(ni_tox$concentration),]
+ni_tox <- ni_tox[!duplicated(ni_tox$species_number)]
+ni_tox$metal <- "Ni"
+
+pb_tox <- pb_tox$filtered_all
+pb_tox <- pb_tox[order(pb_tox$concentration),]
+pb_tox <- pb_tox[!duplicated(pb_tox$species_number)]
+pb_tox$metal <- "Pb"
+
+sm_tox <- sm_tox$filtered_all
+sm_tox <- sm_tox[order(sm_tox$concentration),]
+sm_tox <- sm_tox[!duplicated(sm_tox$species_number)]
+sm_tox$metal <- "Sm"
+
+y_tox <- y_tox$filtered_all
+y_tox <- y_tox[order(y_tox$concentration),]
+y_tox <- y_tox[!duplicated(y_tox$species_number)]
+y_tox$metal <- "Y"
+
+zn_tox <- zn_tox$filtered_all
+zn_tox <- zn_tox[order(zn_tox$concentration),]
+zn_tox <- zn_tox[!duplicated(zn_tox$species_number)]
+zn_tox$metal <- "Zn"
+```
+
+# Filtered toxicity datasets
+```{r}
+ag_tox
+as_iii_tox
+as_v_tox
+cd_tox
+cr_tox
+cu_tox
+gd_tox
+hg_tox
+ni_tox
+pb_tox
+sm_tox
+y_tox
+zn_tox
+```
+
+# Toxic unit effect concentration (log median)
+```{r}
+if (dim(ag_tox)[2]<2) {
+  tu_ag <- "NA"
+} else {
+    tu_ag <- median(log(ag_tox$concentration,10))}
+if (dim(as_iii_tox)[2]<2) {
+  tu_as_iii <- "NA"
+} else {
+    tu_as_iii <- median(log(as_iii_tox$concentration,10))}
+if (dim(as_v_tox)[2]<2) {
+  tu_as_v <- "NA"
+} else {
+    tu_as_v <- median(log(as_v_tox$concentration,10))}
+if (dim(cd_tox)[2]<2) {
+  tu_cd <- "NA"
+} else {
+    tu_cd <- median(log(cd_tox$concentration,10))}
+if (dim(cr_tox)[2]<2) {
+  tu_cr <- "NA"
+} else {
+    tu_cr <- median(log(cr_tox$concentration,10))}
+if (dim(cu_tox)[2]<2) {
+  tu_cu <- "NA"
+} else {
+    tu_cu <- median(log(cu_tox$concentration,10))}
+if (dim(gd_tox)[2]<2) {
+  tu_gd <- "NA"
+} else {
+    tu_gd <- median(log(gd_tox$concentration,10))}
+if (dim(hg_tox)[2]<2) {
+  tu_hg <- "NA"
+} else {
+    tu_hg <- median(log(hg_tox$concentration,10))}
+if (dim(ni_tox)[2]<2) {
+  tu_ni <- "NA"
+} else {
+    tu_ni <- median(log(ni_tox$concentration,10))}
+tu_pb <- median(pb_tox$concentration)
+if (dim(pb_tox)[2]<2) {
+  tu_pb <- "NA"
+} else {
+    tu_pb <- median(log(pb_tox$concentration,10))}
+if (dim(sm_tox)[2]<2) {
+  tu_sm <- "NA"
+} else {
+    tu_sm <- median(log(sm_tox$concentration,10))}
+if (dim(y_tox)[2]<2) {
+  tu_y <- "NA"
+} else {
+    tu_y <- median(log(y_tox$concentration,10))}
+if (dim(zn_tox)[2]<2) {
+  tu_zn <- "NA"
+} else {
+    tu_zn <- median(log(zn_tox$concentration,10))}
+
+tu_median<-data.frame(metal = c("Ag","As(III)","As(V)","Cd","Cr(VI)","Cu","Gd","Hg","Ni","Pb","Sm","Y","Zn"),
+               effect_conc = c(tu_ag,tu_as_iii,tu_as_v,tu_cd,tu_cr,tu_cu,tu_gd,tu_hg,tu_ni,tu_pb,tu_sm,tu_y,tu_zn))
+tu_median$effect_conc <- as.numeric(tu_median$effect_conc)
+tu_median
+tu_median_bivalves <- tu_median
+tu_median_bivalves$effect_conc <- 10^(tu_median_bivalves$effect_conc)
+
+```
+
+# Plot - median
+
+```{r}
+plot_bivalve_median <- ggplot(data = na.omit(tu_median), mapping = aes(x= metal, y = effect_conc)) +
+  geom_bar(stat="identity", fill = "dodgerblue4") +
+  labs(x = "Metal", y = "Effect concentration (µg/l)") +
+  theme_classic() +
+  scale_y_continuous(breaks = c(0,1,2,3,4,5), labels = c("1","10","100","1 000","10 000","100 000"), limits = c(log(0.75, 10), log(400000, 10))) +
+  geom_point(data=ag_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=as_iii_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  #geom_point(data=as_v_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=cd_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=cr_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=cu_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  #geom_point(data=gd_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=hg_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=ni_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=pb_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  #geom_point(data=sm_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3) +
+  #geom_point(data=y_tox, aes(x = metal, y = log(concentration,10), colour = "firebrick1", shape = 1, size = 3) +
+  geom_point(data=zn_tox, aes(x = metal, y = log(concentration,10)), colour = "firebrick1", shape = 1, size = 3)
+
+plot_bivalve_median
+```
+
+
+
+```{r}
+#write.xlsx(tu_median_bivalves, "toxic_unit.xlsx", asTable = TRUE, overwrite = TRUE)
+```
+
+
