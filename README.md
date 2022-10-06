@@ -2,10 +2,9 @@
 ## A systematic review and meta-analysis on metal-exposed bivalves
 
 [![CC BY 4.0][cc-by-shield]][cc-by]
-[![Paper link](https://img.shields.io/badge/Accepted%20in-ET&C-126888.svg)](https://setac.onlinelibrary.wiley.com/journal/15528618?utm_source=google&utm_medium=paidsearch&utm_campaign=R3MR425&utm_content=EarthSpaceEnvirSci&gclid=CjwKCAjw4c-ZBhAEEiwAZ105RY1dJtdvV5dOW3I_jfWfiN4LVUlRSamQ3-72Yk_15SOdkrqCWb7XlhoCagEQAvD_BwE)
+[![Paper link](https://img.shields.io/badge/Published%20in-ET&C-126888.svg)](https://doi.org/10.1002/etc.5494)
 
-*Reference:* Ekelund Ugge GMO, Sahlin U, Jonsson A, Berglund O, 2022. Transcriptional responses as biomarkers of general toxicity: a systematic review and meta-analysis on metal-exposed bivalves.
-Accepted for publication in Environmental Toxicology and Chemistry.
+Ekelund Ugge GMO, Sahlin U, Jonsson A, Berglund O, 2022. Transcriptional responses as biomarkers of general toxicity: a systematic review and meta-analysis on metal-exposed bivalves. Environmental Toxicology and Chemistry. [DOI: 10.1002/etc.5494](https://doi.org/10.1002/etc.5494).
 
 #### Graphical abstract
 ![Graphical abstract](graphical_abstract.png)
@@ -20,7 +19,7 @@ Through a systematic review and a series of meta-analyses, we evaluated the gene
 
 
 #### Data and code
-Here, we provide data and code to reproduce the results presented in 'Transcriptional responses as biomarkers of general toxicity'. Please see the [metadata](metadata.pdf) for an overview. The full dataset (including raw data and background data not included as results or in the analyses) is available on [Mendeley](https://doi.org/10.17632/83jc4yv35h).
+Here, we provide data and R code to reproduce the results presented in '[Transcriptional responses as biomarkers of general toxicity](https://doi.org/10.1002/etc.5494)'. Please see the [metadata](metadata.pdf) for an overview. The full dataset (including raw data and background data not included as results or in the analyses) is available on [Mendeley](https://doi.org/10.17632/83jc4yv35h).
 
 
 #### License
